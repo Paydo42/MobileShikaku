@@ -19,12 +19,9 @@ using UnityEngine;
 ///
 /// For a solvable puzzle the clue numbers must sum to the number of cells.
 /// </summary>
-[CreateAssetMenu(fileName = "Level", menuName = "Shikaku/Puzzle")]
-public class ShikakuPuzzle : ScriptableObject
+[CreateAssetMenu(fileName = "ShikakuLevel", menuName = "Shikaku/Puzzle")]
+public class ShikakuPuzzle : PuzzleLevel
 {
-    [Tooltip("Shown on the level-select button. Falls back to 'Level N' if empty.")]
-    public string levelName = "New Level";
-
     [TextArea(3, 20)]
     [Tooltip("One row per line, top row first. Numbers = clues, 0 or . = empty.")]
     public string grid =

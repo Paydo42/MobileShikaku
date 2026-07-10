@@ -19,14 +19,28 @@ public class GridManager : MonoBehaviour
     [SerializeField] private Tile tilePrefab;
     [Tooltip("Optional parent for spawned tiles. Defaults to this transform.")]
     [SerializeField] private Transform boardParent;
+    [Tooltip("Optional LineRenderer drawn as a marquee outline around the current selection.")]
+    [SerializeField] private LineRenderer selectionBox;
     [Tooltip("Fallback levels used only when testing the game scene directly.")]
     [SerializeField] private LevelDatabase fallbackDatabase;
     [Tooltip("Optional: force a single puzzle (overrides everything). Handy for testing.")]
     [SerializeField] private ShikakuPuzzle puzzle;
 
     [Header("Layout")]
-    [Tooltip("World-space size of one cell. Tiles are centred on this object.")]
+    [Tooltip("World-space size of one cell. Ignored when Auto Cell Size is on.")]
     [SerializeField] private float cellSize = 1f;
+    [Tooltip("Compute cell size from the camera so the whole board always fits on screen.")]
+    [SerializeField] private bool autoCellSize = true;
+    [Tooltip("Upper limit for auto cell size, so small boards don't get huge tiles.")]
+    [SerializeField] private float maxCellSize = 1f;
+    [Range(0.5f, 1f)]
+    [Tooltip("Fraction of the screen the board may fill when auto-sizing.")]
+    [SerializeField] private float boardScreenFill = 0.9f;
+    [Tooltip("Scale each spawned tile to fit Cell Size. Off = use the prefab's own scale.")]
+    [SerializeField] private bool autoFitTiles = true;
+    [Range(0.5f, 1f)]
+    [Tooltip("Fraction of the cell a tile fills (leaves a gap between tiles).")]
+    [SerializeField] private float tileFill = 0.95f;
 
     [Header("Colours")]
     [SerializeField] private Color emptyColor = new(0.92f, 0.92f, 0.92f);
@@ -34,6 +48,18 @@ public class GridManager : MonoBehaviour
     [SerializeField] private Color previewColor = new(1.00f, 0.95f, 0.55f);
     [SerializeField] private Color validColor = new(0.60f, 0.85f, 0.60f);
     [SerializeField] private Color invalidColor = new(0.90f, 0.55f, 0.55f);
+
+    [Header("Feedback")]
+    [Tooltip("Played when a rectangle is placed.")]
+    [SerializeField] private AudioClip placeSound;
+    [Tooltip("Played when a placed rectangle is correct (falls back to place sound).")]
+    [SerializeField] private AudioClip validSound;
+    [Tooltip("Played when a rectangle is erased.")]
+    [SerializeField] private AudioClip eraseSound;
+    [Tooltip("Scale-pop the tiles of a rectangle when it's placed.")]
+    [SerializeField] private bool animateSelection = true;
+    [SerializeField] private float popStrength = 1.15f;
+    [SerializeField] private float popDuration = 0.15f;
 
     [Header("Events")]
     public UnityEvent OnSolved;
@@ -78,6 +104,9 @@ public class GridManager : MonoBehaviour
         _tiles = new Tile[_width, _height];
         _owner = new ShikakuRect[_width, _height];
 
+        if (autoCellSize)
+            cellSize = BoardLayout.FitCellSize(Camera.main, _width, _height, boardScreenFill, maxCellSize);
+
         Transform parent = boardParent != null ? boardParent : transform;
         for (int x = 0; x < _width; x++)
         {
@@ -86,11 +115,13 @@ public class GridManager : MonoBehaviour
                 var coord = new Vector2Int(x, y);
                 Tile tile = Instantiate(tilePrefab, CellToWorld(coord), Quaternion.identity, parent);
                 tile.Init(coord, _clues[x, y]);
+                BoardLayout.FitTileToCell(tile.transform, cellSize, autoFitTiles, tileFill);
                 _tiles[x, y] = tile;
             }
         }
 
         RefreshColors();
+        HideSelectionBox();
     }
 
     /// <summary>Picks the level chosen on the level-select screen, or a sample.</summary>
@@ -102,8 +133,8 @@ public class GridManager : MonoBehaviour
 
         if (db != null && db.Count > 0)
         {
-            ShikakuPuzzle chosen = db.Get(LevelSession.SelectedLevel);
-            if (chosen != null) return chosen;
+            if (db.Get(LevelSession.SelectedLevel) is ShikakuPuzzle chosen)
+                return chosen;
         }
         return ShikakuPuzzle.CreateSample();
     }
@@ -151,12 +182,14 @@ public class GridManager : MonoBehaviour
         _previewBounds = BoundsFrom(Clamp(a), Clamp(b));
         _hasPreview = true;
         RefreshColors();
+        UpdateSelectionBox(_previewBounds);
     }
 
     public void ClearPreview()
     {
         _hasPreview = false;
         RefreshColors();
+        HideSelectionBox();
     }
 
     /// <summary>
@@ -167,6 +200,7 @@ public class GridManager : MonoBehaviour
     public void CommitSelection(Vector2Int a, Vector2Int b)
     {
         _hasPreview = false;
+        HideSelectionBox();
         RectInt bounds = BoundsFrom(Clamp(a), Clamp(b));
 
         // Tap on an owned cell => erase that rectangle.
@@ -177,6 +211,7 @@ public class GridManager : MonoBehaviour
             {
                 RemoveRect(tapped);
                 RefreshColors();
+                PlaySound(eraseSound);
                 CheckSolved();
                 return;
             }
@@ -190,7 +225,48 @@ public class GridManager : MonoBehaviour
         Validate(rect);
 
         RefreshColors();
+        AnimateRect(bounds);
+        PlaySound(rect.valid && validSound != null ? validSound : placeSound);
         CheckSolved();
+    }
+
+    private void PlaySound(AudioClip clip)
+    {
+        if (clip != null && SoundManager.Instance != null)
+            SoundManager.Instance.PlaySfx(clip);
+    }
+
+    private void AnimateRect(RectInt bounds)
+    {
+        if (!animateSelection) return;
+        for (int x = bounds.xMin; x < bounds.xMax; x++)
+            for (int y = bounds.yMin; y < bounds.yMax; y++)
+                _tiles[x, y].PlayPop(popStrength, popDuration);
+    }
+
+    // Draws the marquee outline around the selected region (world space).
+    private void UpdateSelectionBox(RectInt b)
+    {
+        if (selectionBox == null) return;
+
+        float half = cellSize * 0.5f;
+        Vector3 min = CellToWorld(new Vector2Int(b.xMin, b.yMin)) + new Vector3(-half, -half, 0f);
+        Vector3 max = CellToWorld(new Vector2Int(b.xMax - 1, b.yMax - 1)) + new Vector3(half, half, 0f);
+        const float z = -0.1f; // nudge toward the camera so it draws over tiles
+
+        selectionBox.useWorldSpace = true;
+        selectionBox.loop = true;
+        selectionBox.positionCount = 4;
+        selectionBox.SetPosition(0, new Vector3(min.x, min.y, z));
+        selectionBox.SetPosition(1, new Vector3(max.x, min.y, z));
+        selectionBox.SetPosition(2, new Vector3(max.x, max.y, z));
+        selectionBox.SetPosition(3, new Vector3(min.x, max.y, z));
+        selectionBox.enabled = true;
+    }
+
+    private void HideSelectionBox()
+    {
+        if (selectionBox != null) selectionBox.enabled = false;
     }
 
     #endregion

@@ -10,15 +10,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 10fbd9f7b927eb148b628cd2e9c3219a, type: 3}
-  m_Name: Level2
+  m_Name: Level6
   m_EditorClassIdentifier: 
-  levelName: Level2
-  grid: '0 0 3 0 0
-
-    4 0 3 0 0
-
-    0 0 0 2 0
-
-    4 0 2 0 0
-
-    3 0 0 4 0'
+  levelName: Level 6
+  grid: "0 9 0 0 9 0\n0 0 0 0 0 0\n0 0 0 0 0 0 \n0 0 6 0 0 0\n4 0 0 0 8 0\n0 0 0
+    0 0 0"

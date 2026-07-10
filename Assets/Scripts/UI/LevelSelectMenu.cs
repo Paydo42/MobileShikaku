@@ -20,29 +20,29 @@ public class LevelSelectMenu : MonoBehaviour
     [SerializeField] private Button buttonPrefab;
     [Tooltip("Parent for spawned buttons (give it a Layout Group).")]
     [SerializeField] private Transform buttonContainer;
-    [Tooltip("Name of the gameplay scene to load. Must be in Build Settings.")]
-    [SerializeField] private string gameSceneName = "Game";
+
+    private LevelDatabase _db;
 
     private void Start()
     {
-        LevelDatabase db = LevelSession.SelectedDatabase != null
+        _db = LevelSession.SelectedDatabase != null
             ? LevelSession.SelectedDatabase
             : fallbackDatabase;
 
-        if (db == null || buttonPrefab == null || buttonContainer == null)
+        if (_db == null || buttonPrefab == null || buttonContainer == null)
         {
             Debug.LogError("LevelSelectMenu: assign a Database, Button Prefab, and Button Container.", this);
             return;
         }
 
         // Persist the resolved mode so the game scene knows which mode is active.
-        LevelSession.SelectedDatabase = db;
+        LevelSession.SelectedDatabase = _db;
 
-        for (int i = 0; i < db.Count; i++)
+        for (int i = 0; i < _db.Count; i++)
         {
             int index = i; // capture for the closure
-            ShikakuPuzzle level = db.levels[i];
-            bool unlocked = LevelProgress.IsUnlocked(db.modeId, index);
+            PuzzleLevel level = _db.levels[i];
+            bool unlocked = LevelProgress.IsUnlocked(_db.modeId, index);
 
             Button button = Instantiate(buttonPrefab, buttonContainer);
             button.interactable = unlocked;
@@ -64,7 +64,7 @@ public class LevelSelectMenu : MonoBehaviour
     private void Play(int index)
     {
         LevelSession.SelectedLevel = index;
-        SceneManager.LoadScene(gameSceneName);
+        SceneManager.LoadScene(_db.gameSceneName);
     }
 
     [ContextMenu("Reset Progress (testing)")]

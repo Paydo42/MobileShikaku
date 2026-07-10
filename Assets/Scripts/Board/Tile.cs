@@ -1,3 +1,4 @@
+using System.Collections;
 using TMPro;
 using UnityEngine;
 
@@ -38,5 +39,40 @@ public class Tile : MonoBehaviour
     public void SetColor(Color color)
     {
         if (background != null) background.color = color;
+    }
+
+    // Scale the tile once auto-fit has run, so the pop animates around the
+    // correct resting size.
+    private Vector3 _restScale = Vector3.one;
+    private Coroutine _popRoutine;
+
+    private void Start() => _restScale = transform.localScale;
+
+    /// <summary>Play a quick scale "pop" (used when a rectangle is placed).</summary>
+    public void PlayPop(float strength, float duration)
+    {
+        if (!gameObject.activeInHierarchy) return;
+        if (_popRoutine != null) StopCoroutine(_popRoutine);
+        _popRoutine = StartCoroutine(PopRoutine(strength, duration));
+    }
+
+    private IEnumerator PopRoutine(float strength, float duration)
+    {
+        Vector3 peak = _restScale * strength;
+        float half = Mathf.Max(0.01f, duration * 0.5f);
+
+        for (float t = 0f; t < half; t += Time.deltaTime)
+        {
+            transform.localScale = Vector3.Lerp(_restScale, peak, t / half);
+            yield return null;
+        }
+        for (float t = 0f; t < half; t += Time.deltaTime)
+        {
+            transform.localScale = Vector3.Lerp(peak, _restScale, t / half);
+            yield return null;
+        }
+
+        transform.localScale = _restScale;
+        _popRoutine = null;
     }
 }
