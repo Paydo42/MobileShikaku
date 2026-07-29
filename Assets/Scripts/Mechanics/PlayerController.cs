@@ -13,9 +13,13 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private GridManager grid;
     [Tooltip("Camera used for screen->world conversion. Defaults to Camera.main.")]
     [SerializeField] private Camera cam;
+    [Tooltip("Hold a placed rectangle this long (without moving) to erase it.")]
+    [SerializeField] private float erasePressSeconds = 0.6f;
 
     private bool _dragging;
     private Vector2Int _anchor;
+    private float _pressTime;
+    private bool _moved;
 
     private void Awake()
     {
@@ -40,6 +44,8 @@ public class PlayerController : MonoBehaviour
         {
             _dragging = true;
             _anchor = cell;
+            _pressTime = Time.time;
+            _moved = false;
             grid.ShowPreview(_anchor, _anchor);
         }
     }
@@ -48,7 +54,15 @@ public class PlayerController : MonoBehaviour
     {
         // ShowPreview clamps to the grid, so an out-of-range pointer is fine.
         grid.TryWorldToCell(PointerWorld(), out Vector2Int cell);
+        if (cell != _anchor) _moved = true;
         grid.ShowPreview(_anchor, cell);
+
+        // Long-press without moving erases the held rectangle.
+        if (!_moved && Time.time - _pressTime >= erasePressSeconds && grid.EraseAt(_anchor))
+        {
+            grid.ClearPreview();
+            _dragging = false;
+        }
     }
 
     private void EndDrag()

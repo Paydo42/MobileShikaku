@@ -15,8 +15,14 @@ MonoBehaviour:
   modeId: preymet
   displayName: Preymet
   gameSceneName: Preymet
+  levelsFolder: 
   levels:
   - {fileID: 11400000, guid: a63b0fb18e0480d49b8f859f215ac788, type: 2}
   - {fileID: 11400000, guid: 9d0c01a4c0804e041ac42bcc980e7e3d, type: 2}
   - {fileID: 11400000, guid: 5b10a0ba3b2cdf74792c31341442d6f5, type: 2}
   - {fileID: 11400000, guid: 0bb21b2a4cd12bf46a530d1bb908c074, type: 2}
+  - {fileID: 11400000, guid: 111ac67c8133a9a41b4cd96bc15a1d6a, type: 2}
+  - {fileID: 11400000, guid: e8ab5262c209e034ea8115df3a6c7872, type: 2}
+  - {fileID: 11400000, guid: 1355c82a93998f4418f5147fe17d3874, type: 2}
+  - {fileID: 11400000, guid: ac94f621b796ef04fbfb1f7047a1423b, type: 2}
+  - {fileID: 11400000, guid: 657a66428d65c4e4dafab51402baf42e, type: 2}

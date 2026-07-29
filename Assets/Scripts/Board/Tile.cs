@@ -32,7 +32,20 @@ public class Tile : MonoBehaviour
         {
             bool hasClue = clue > 0;
             label.gameObject.SetActive(hasClue);
-            if (hasClue) label.text = clue.ToString();
+            if (hasClue)
+            {
+                label.text = clue.ToString();
+
+                // Centre the digits within the label's rect and never wrap a
+                // multi-digit clue onto a second line. The rect's placement
+                // (pivot/position) is the prefab's responsibility.
+                label.alignment = TextAlignmentOptions.Center;
+                label.textWrappingMode = TextWrappingModes.NoWrap;
+
+                // Keep the number above the rectangle boxes drawn over the board.
+                var labelRenderer = label.GetComponent<Renderer>();
+                if (labelRenderer != null) labelRenderer.sortingOrder = 20;
+            }
         }
     }
 

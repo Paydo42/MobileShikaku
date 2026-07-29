@@ -1,3 +1,5 @@
+using System;
+using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -16,6 +18,12 @@ public class LevelCompleteController : MonoBehaviour
     [SerializeField] private GameObject winPanel;
     [Tooltip("Next-level button; auto-disabled when there is no next level.")]
     [SerializeField] private Button nextButton;
+    [Tooltip("Types out 'You completed <level> in <n> seconds' when the panel appears.")]
+    [SerializeField] private TypewriterText resultText;
+    [Tooltip("Container holding the win panel's Next/Back buttons. Revealed once the result text finishes typing.")]
+    [SerializeField] private GameObject winButtons;
+    [Tooltip("The Shikaku board this panel belongs to, so solve time can be read. Leave empty for modes without a solve timer.")]
+    [SerializeField] private GridManager shikakuBoard;
 
     [Header("Fail (optional)")]
     [Tooltip("Panel shown when the level is failed (e.g. time ran out). Hidden on start.")]
@@ -48,6 +56,35 @@ public class LevelCompleteController : MonoBehaviour
 
         HideInGameViews();
         if (winPanel != null) winPanel.SetActive(true);
+
+        // Buttons stay hidden until the result sentence has finished typing.
+        if (winButtons != null) winButtons.SetActive(false);
+
+        // Played after the panel is active, so the typewriter can animate.
+        if (resultText != null)
+            resultText.Play(BuildSummary(db, index), ShowWinButtons);
+        else
+            ShowWinButtons();
+    }
+
+    private void ShowWinButtons()
+    {
+        if (winButtons != null) winButtons.SetActive(true);
+    }
+
+    // "You completed <i>Level 4</i> in 37 seconds", localized. The level name is
+    // italicised with a rich-text tag so the translation strings stay markup-free.
+    private string BuildSummary(LevelDatabase db, int index)
+    {
+        string levelName = db != null ? db.GetDisplayName(index) : string.Empty;
+        int seconds = shikakuBoard != null ? Mathf.Max(0, Mathf.RoundToInt(shikakuBoard.SolveTimeSeconds)) : 0;
+
+        string template = LocalizationManager.Get(
+            shikakuBoard != null ? "win_summary" : "win_summary_no_time");
+
+        return shikakuBoard != null
+            ? string.Format(template, $"<i>{levelName}</i>", seconds)
+            : string.Format(template, $"<i>{levelName}</i>");
     }
 
     /// <summary>Call from the board's OnFailed event (modes with a fail state).</summary>
@@ -64,11 +101,22 @@ public class LevelCompleteController : MonoBehaviour
         if (boardToHide != null) boardToHide.SetActive(false);
     }
 
-    /// <summary>Hook to the Next button's OnClick.</summary>
+    /// <summary>
+    /// Hook to the Next button's OnClick. Advancing is the only action that
+    /// counts toward the interstitial cadence (Retry / Back don't).
+    /// </summary>
     public void NextLevel()
     {
-        LevelSession.SelectedLevel++;
-        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+        Action loadNext = () =>
+        {
+            LevelSession.SelectedLevel++;
+            SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+        };
+
+        if (AdManager.Instance != null)
+            AdManager.Instance.ShowInterstitialThenContinue(loadNext);
+        else
+            loadNext();
     }
 
     /// <summary>Hook to the Retry button's OnClick (replays the current level).</summary>

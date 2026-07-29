@@ -1,0 +1,69 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b5059d0a279bf6349a268cb3dd7eeb32, type: 3}
+  m_Name: LocalizationTable
+  m_EditorClassIdentifier: 
+  entries:
+  - key: play
+    english: Play
+    turkish: Oyna
+  - key: options
+    english: Options
+    turkish: Ayarlar
+  - key: music
+    english: Music
+    turkish: "M\xFCzik"
+  - key: sound
+    english: Sound Effects
+    turkish: Ses Efektleri
+  - key: language
+    english: Language
+    turkish: Dil
+  - key: back
+    english: Back
+    turkish: Geri
+  - key: quit
+    english: Quit
+    turkish: "\xC7\u0131k\u0131\u015F"
+  - key: next
+    english: Next
+    turkish: Sonraki
+  - key: retry
+    english: Retry
+    turkish: Tekrar Dene
+  - key: levels
+    english: Levels
+    turkish: "B\xF6l\xFCmler"
+  - key: select_level
+    english: Select Level
+    turkish: "B\xF6l\xFCm Se\xE7"
+  - key: you_win
+    english: You Win!
+    turkish: "Kazand\u0131n!"
+  - key: time_up
+    english: Time's Up!
+    turkish: "S\xFCre Doldu!"
+  - key: locked
+    english: Locked
+    turkish: Kilitli
+  - key: main_menu
+    english: Main Menu
+    turkish: "Ana Men\xFC"
+  - key: level
+    english: Level
+    turkish: "B\xF6l\xFCm"
+  - key: win_summary
+    english: You completed {0} in {1} seconds
+    turkish: "{0} b\xF6l\xFCm\xFCn\xFC {1} saniyede tamamlad\u0131n"
+  - key: win_summary_no_time
+    english: You completed {0}
+    turkish: "{0} b\xF6l\xFCm\xFCn\xFC tamamlad\u0131n"

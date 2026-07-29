@@ -30,6 +30,18 @@ public class SoundManager : MonoBehaviour
     [Tooltip("Mute everything when the app loses focus / is backgrounded.")]
     [SerializeField] private bool muteOnFocusLoss = true;
 
+    [Header("Puzzle SFX")]
+    [Tooltip("Played each time a path grows onto a new tile (Preymet).")]
+    [SerializeField] private AudioClip pathStepClip;
+    [Tooltip("Played when a path step is undone. Falls back to the step clip.")]
+    [SerializeField] private AudioClip pathBacktrackClip;
+    [Tooltip("Played when a Shikaku rectangle is placed.")]
+    [SerializeField] private AudioClip rectPlaceClip;
+    [Tooltip("Played when a placed rectangle is correct. Falls back to the place clip.")]
+    [SerializeField] private AudioClip rectValidClip;
+    [Tooltip("Played when a Shikaku rectangle is erased.")]
+    [SerializeField] private AudioClip rectEraseClip;
+
     // --- PlayerPrefs keys ---
     private const string PrefMasterVolume = "snd_master_volume";
     private const string PrefMusicVolume = "snd_music_volume";
@@ -132,6 +144,23 @@ public class SoundManager : MonoBehaviour
         source.pitch = pitch;
         source.PlayOneShot(clip, Mathf.Clamp01(volumeScale));
     }
+
+    /// <summary>Play the path-step sound (Preymet drag). Pitch is optional.</summary>
+    public void PlayPathStep(float pitch = 1f) => PlaySfx(pathStepClip, 1f, pitch);
+
+    /// <summary>Play the path-backtrack sound; falls back to the step clip.</summary>
+    public void PlayPathBacktrack(float pitch = 1f) =>
+        PlaySfx(pathBacktrackClip != null ? pathBacktrackClip : pathStepClip, 1f, pitch);
+
+    /// <summary>Play the Shikaku place-rectangle sound.</summary>
+    public void PlayRectPlace() => PlaySfx(rectPlaceClip);
+
+    /// <summary>Play the Shikaku correct-rectangle sound; falls back to place.</summary>
+    public void PlayRectValid(float pitch = 1f) =>
+        PlaySfx(rectValidClip != null ? rectValidClip : rectPlaceClip, 1f, pitch);
+
+    /// <summary>Play the Shikaku erase-rectangle sound.</summary>
+    public void PlayRectErase() => PlaySfx(rectEraseClip);
 
     /// <summary>
     /// Play a sound effect with a randomized pitch range for organic variation

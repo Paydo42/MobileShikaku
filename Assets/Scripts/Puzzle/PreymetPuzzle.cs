@@ -17,9 +17,9 @@ using UnityEngine;
 [CreateAssetMenu(fileName = "PreymetLevel", menuName = "Shikaku/Preymet Puzzle")]
 public class PreymetPuzzle : PuzzleLevel
 {
-    [Min(2)]
-    [Tooltip("Exact number of tiles the path must use, including start and goal.")]
-    public int targetTiles = 7;
+    [Min(0)]
+    [Tooltip("Exact number of tiles the path must cross between start and goal. S and G themselves don't count.")]
+    public int targetTiles = 5;
 
     [Min(0f)]
     [Tooltip("Seconds allowed to solve this level. 0 = no time limit.")]

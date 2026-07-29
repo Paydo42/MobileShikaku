@@ -41,7 +41,6 @@ public class LevelSelectMenu : MonoBehaviour
         for (int i = 0; i < _db.Count; i++)
         {
             int index = i; // capture for the closure
-            PuzzleLevel level = _db.levels[i];
             bool unlocked = LevelProgress.IsUnlocked(_db.modeId, index);
 
             Button button = Instantiate(buttonPrefab, buttonContainer);
@@ -50,10 +49,8 @@ public class LevelSelectMenu : MonoBehaviour
             var label = button.GetComponentInChildren<TMP_Text>();
             if (label != null)
             {
-                string name = level != null && !string.IsNullOrEmpty(level.levelName)
-                    ? level.levelName
-                    : $"Level {index + 1}";
-                label.text = unlocked ? name : $"{name}  (locked)";
+                string name = _db.GetDisplayName(index);
+                label.text = unlocked ? name : $"{name} ({LocalizationManager.Get("locked")})";
             }
 
             if (unlocked)

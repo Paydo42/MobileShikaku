@@ -10,8 +10,8 @@ using UnityEngine.Events;
 ///   * Orthogonal steps only (no diagonals).
 ///   * No revisiting a cell (the path can't cross itself).
 ///   * Walls (blocked cells) can't be entered.
-/// The level is solved when the path runs from Start to Goal using exactly the
-/// level's target number of tiles.
+/// The level is solved when the path runs from Start to Goal crossing exactly
+/// the level's target number of tiles in between (S and G don't count).
 /// </summary>
 [DisallowMultipleComponent]
 public class PreymetBoard : MonoBehaviour
@@ -47,6 +47,13 @@ public class PreymetBoard : MonoBehaviour
     [SerializeField] private Color goalColor = new(0.95f, 0.70f, 0.40f);
     [SerializeField] private Color pathColor = new(0.50f, 0.70f, 1.00f);
 
+    [Header("Feedback")]
+    [Tooltip("Raise the step sound's pitch as the path nears the target length. Clips are assigned on the SoundManager.")]
+    [SerializeField] private bool risingPitch = true;
+    [Range(0f, 1f)]
+    [Tooltip("Total pitch rise between the first tile and the target length.")]
+    [SerializeField] private float pitchRise = 0.4f;
+
     [Header("Events")]
     public UnityEvent OnSolved;
     [Tooltip("Fired when the time limit runs out before solving.")]
@@ -65,11 +72,20 @@ public class PreymetBoard : MonoBehaviour
     private float _timeRemaining;
     private bool _finished; // solved or failed; locks the board
 
-    /// <summary>Exact tile count the path must reach (for the HUD).</summary>
+    /// <summary>Tiles the path must cross between start and goal (for the HUD).</summary>
     public int TargetTiles => _target;
 
-    /// <summary>Current number of tiles in the traced path (for the HUD).</summary>
-    public int PathLength => _path.Count;
+    /// <summary>Tiles crossed so far, not counting start and goal (for the HUD).</summary>
+    public int PathLength
+    {
+        get
+        {
+            int steps = 0;
+            foreach (Vector2Int c in _path)
+                if (c != _start && c != _goal) steps++;
+            return steps;
+        }
+    }
 
     /// <summary>Whether this level has a countdown (for the HUD).</summary>
     public bool HasTimeLimit => _timeLimit > 0f;
@@ -105,7 +121,7 @@ public class PreymetBoard : MonoBehaviour
         if (puzzle == null) puzzle = SelectPuzzle();
 
         puzzle.Parse(out _blocked, out _start, out _goal, out _width, out _height);
-        _target = Mathf.Max(2, puzzle.targetTiles);
+        _target = Mathf.Max(0, puzzle.targetTiles);
         _timeLimit = Mathf.Max(0f, puzzle.timeLimitSeconds);
         _timeRemaining = _timeLimit;
         _tiles = new PreymetTile[_width, _height];
@@ -191,14 +207,17 @@ public class PreymetBoard : MonoBehaviour
             _path.Clear();
             _path.Add(_start);
             RefreshColors();
+            PlayStepSound(backtrack: false);
             return true;
         }
 
         int existing = _path.IndexOf(cell);
         if (existing >= 0)
         {
-            _path.RemoveRange(existing + 1, _path.Count - existing - 1);
+            int removed = _path.Count - existing - 1;
+            _path.RemoveRange(existing + 1, removed);
             RefreshColors();
+            if (removed > 0) PlayStepSound(backtrack: true);
             return true;
         }
 
@@ -221,17 +240,37 @@ public class PreymetBoard : MonoBehaviour
         {
             _path.RemoveAt(_path.Count - 1);
             RefreshColors();
+            PlayStepSound(backtrack: true);
             return;
         }
+
+        // The goal is terminal: once the path reaches it you can only back out,
+        // never step through it to keep going.
+        if (head == _goal) return;
 
         if (_path.Contains(cell)) return; // would cross itself
 
         _path.Add(cell);
         RefreshColors();
+        PlayStepSound(backtrack: false);
         CheckSolved();
     }
 
     public void EndPath() => CheckSolved();
+
+    // Pitch climbs from 1 toward (1 + pitchRise) as the path nears the target,
+    // so the player can hear whether the count is on track.
+    private void PlayStepSound(bool backtrack)
+    {
+        if (SoundManager.Instance == null) return;
+
+        float pitch = 1f;
+        if (risingPitch && _target > 0)
+            pitch = 1f + pitchRise * Mathf.Clamp01(PathLength / (float)_target);
+
+        if (backtrack) SoundManager.Instance.PlayPathBacktrack(pitch);
+        else SoundManager.Instance.PlayPathStep(pitch);
+    }
 
     #endregion
 
@@ -240,8 +279,9 @@ public class PreymetBoard : MonoBehaviour
     private void CheckSolved()
     {
         if (_finished) return;
-        if (_path.Count != _target) return;
+        if (_path.Count < 2) return; // needs at least start + goal
         if (_path[0] != _start || _path[^1] != _goal) return;
+        if (PathLength != _target) return; // tiles between S and G
 
         _finished = true;
         OnSolved?.Invoke();
