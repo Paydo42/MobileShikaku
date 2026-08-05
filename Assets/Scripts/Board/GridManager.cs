@@ -125,6 +125,7 @@ public class GridManager : MonoBehaviour
         public bool valid;
         public Vector2Int clueCell;   // the clue this rectangle solves (when valid)
         public GameObject visual;     // the persistent box (fill + outline)
+        public int placeOrder;        // when it was placed, for the win sequence
 
         public ShikakuRect(RectInt bounds) => this.bounds = bounds;
     }
@@ -143,6 +144,15 @@ public class GridManager : MonoBehaviour
 
     /// <summary>Seconds it took to solve the level (valid once solved).</summary>
     public float SolveTimeSeconds => _solveTimeSeconds;
+
+    /// <summary>True once the board is solved and locked (for helper UI).</summary>
+    public bool IsSolved => _solved;
+
+    // Boxes in the order they were placed, so Undo can remove the newest one.
+    private readonly Stack<ShikakuRect> _history = new();
+    private int _placeCounter;
+    private List<RectInt> _solution;  // computed on demand by the solver
+    private bool _solveTried;
 
     // Spring state for the bouncy selection outline.
     private Vector2 _boxMin, _boxMax, _boxMinVel, _boxMaxVel;
@@ -317,20 +327,30 @@ public class GridManager : MonoBehaviour
             }
         }
 
+        PlaceRect(bounds, playSound: true, record: true);
+    }
+
+    // Shared placement path for player commits and hints: replaces overlapped
+    // rectangles, builds the new one, and (optionally) records it for undo.
+    private void PlaceRect(RectInt bounds, bool playSound, bool record)
+    {
         RemoveOverlapping(bounds);
 
-        var rect = new ShikakuRect(bounds);
+        var rect = new ShikakuRect(bounds) { placeOrder = _placeCounter++ };
         _rects.Add(rect);
         SetOwner(rect, rect);
         Validate(rect);
         CreateRectVisual(rect);
-
         AnimateRect(bounds);
-        if (SoundManager.Instance != null)
+
+        if (record) _history.Push(rect);
+
+        if (playSound && SoundManager.Instance != null)
         {
             if (rect.valid) SoundManager.Instance.PlayRectValid();
             else SoundManager.Instance.PlayRectPlace();
         }
+
         CheckSolved();
     }
 
@@ -349,6 +369,104 @@ public class GridManager : MonoBehaviour
         RefreshColors();
         if (SoundManager.Instance != null) SoundManager.Instance.PlayRectErase();
         return true;
+    }
+
+    #endregion
+
+    #region Helpers (undo / hint / solve-all)
+
+    /// <summary>True while there is a placed box left to remove.</summary>
+    public bool CanUndo
+    {
+        get
+        {
+            if (_solved) return false;
+            PruneHistory();
+            return _history.Count > 0;
+        }
+    }
+
+    /// <summary>
+    /// Remove the most recently placed box. Unlimited use. Boxes that are
+    /// already gone (erased or drawn over) are skipped.
+    /// </summary>
+    public bool UndoLastMove()
+    {
+        if (_solved) return false;
+
+        PruneHistory();
+        if (_history.Count == 0) return false;
+
+        RemoveRect(_history.Pop());
+        if (SoundManager.Instance != null) SoundManager.Instance.PlayRectErase();
+        return true;
+    }
+
+    // Drop history entries whose box is no longer on the board.
+    private void PruneHistory()
+    {
+        while (_history.Count > 0 && !_rects.Contains(_history.Peek()))
+            _history.Pop();
+    }
+
+    /// <summary>
+    /// Place one rectangle from the computed solution that isn't on the board
+    /// yet (replacing anything wrong in its way). False if unavailable — spend
+    /// a helper credit only when this returns true.
+    /// </summary>
+    public bool UseHint()
+    {
+        if (_solved) return false;
+
+        List<RectInt> solution = GetSolution();
+        if (solution == null) return false;
+
+        foreach (RectInt bounds in solution)
+        {
+            if (HasIdenticalRect(bounds)) continue;
+            PlaceRect(bounds, playSound: true, record: true);
+            return true;
+        }
+        return false; // everything already correctly placed
+    }
+
+    /// <summary>Complete the whole board from the solution (triggers the win).</summary>
+    public bool SolveAll()
+    {
+        if (_solved) return false;
+
+        List<RectInt> solution = GetSolution();
+        if (solution == null) return false;
+
+        bool placedAny = false;
+        foreach (RectInt bounds in solution)
+        {
+            if (HasIdenticalRect(bounds)) continue;
+            PlaceRect(bounds, playSound: false, record: false);
+            placedAny = true;
+        }
+
+        if (placedAny && SoundManager.Instance != null) SoundManager.Instance.PlayRectValid();
+        return placedAny;
+    }
+
+    private bool HasIdenticalRect(RectInt bounds)
+    {
+        foreach (ShikakuRect r in _rects)
+            if (r.bounds.Equals(bounds)) return true;
+        return false;
+    }
+
+    private List<RectInt> GetSolution()
+    {
+        if (!_solveTried)
+        {
+            _solveTried = true;
+            _solution = ShikakuSolver.Solve(_clues);
+            if (_solution == null)
+                Debug.LogWarning("GridManager: this level has no solution — hints unavailable.", this);
+        }
+        return _solution;
     }
 
     private void AnimateRect(RectInt bounds)
@@ -690,12 +808,10 @@ public class GridManager : MonoBehaviour
     {
         yield return new WaitForSeconds(winStartDelay);
 
+        // Replay the player's own solving order: first box they placed bounces
+        // first, then the second, and so on.
         var ordered = new List<ShikakuRect>(_rects);
-        ordered.Sort((a, b) =>
-        {
-            int byRow = b.bounds.center.y.CompareTo(a.bounds.center.y); // top first
-            return byRow != 0 ? byRow : a.bounds.center.x.CompareTo(b.bounds.center.x);
-        });
+        ordered.Sort((a, b) => a.placeOrder.CompareTo(b.placeOrder));
 
         for (int i = 0; i < ordered.Count; i++)
         {

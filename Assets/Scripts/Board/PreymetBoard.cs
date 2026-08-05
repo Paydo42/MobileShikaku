@@ -10,8 +10,9 @@ using UnityEngine.Events;
 ///   * Orthogonal steps only (no diagonals).
 ///   * No revisiting a cell (the path can't cross itself).
 ///   * Walls (blocked cells) can't be entered.
-/// The level is solved when the path runs from Start to Goal crossing exactly
-/// the level's target number of tiles in between (S and G don't count).
+/// The level is solved when the path runs from Start to Goal in exactly the
+/// level's target number of steps. Each move onto a new tile is one step
+/// (the final move onto the goal included); the start tile is not a step.
 /// </summary>
 [DisallowMultipleComponent]
 public class PreymetBoard : MonoBehaviour
@@ -75,17 +76,12 @@ public class PreymetBoard : MonoBehaviour
     /// <summary>Tiles the path must cross between start and goal (for the HUD).</summary>
     public int TargetTiles => _target;
 
-    /// <summary>Tiles crossed so far, not counting start and goal (for the HUD).</summary>
-    public int PathLength
-    {
-        get
-        {
-            int steps = 0;
-            foreach (Vector2Int c in _path)
-                if (c != _start && c != _goal) steps++;
-            return steps;
-        }
-    }
+    /// <summary>
+    /// Steps taken so far (for the HUD). The start tile is where the player
+    /// begins, so it isn't a step; every move onto a new tile is — including
+    /// the final move onto the goal.
+    /// </summary>
+    public int PathLength => Mathf.Max(0, _path.Count - 1);
 
     /// <summary>Whether this level has a countdown (for the HUD).</summary>
     public bool HasTimeLimit => _timeLimit > 0f;
@@ -121,7 +117,7 @@ public class PreymetBoard : MonoBehaviour
         if (puzzle == null) puzzle = SelectPuzzle();
 
         puzzle.Parse(out _blocked, out _start, out _goal, out _width, out _height);
-        _target = Mathf.Max(0, puzzle.targetTiles);
+        _target = Mathf.Max(1, puzzle.targetTiles);
         _timeLimit = Mathf.Max(0f, puzzle.timeLimitSeconds);
         _timeRemaining = _timeLimit;
         _tiles = new PreymetTile[_width, _height];

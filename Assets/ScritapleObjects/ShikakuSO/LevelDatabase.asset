@@ -17,6 +17,8 @@ MonoBehaviour:
   gameSceneName: Game
   levelsFolder: 
   levels:
+  - {fileID: 11400000, guid: 8fbf4fbfbe7612246886905138d78280, type: 2}
+  - {fileID: 11400000, guid: 995105428b85b314082a79c975348978, type: 2}
   - {fileID: 11400000, guid: fef93edcffdb911418a48c3354b4e377, type: 2}
   - {fileID: 11400000, guid: 6e17fb3dac3198542a3e427c5c8cc578, type: 2}
   - {fileID: 11400000, guid: 929b09895f5f60e4c9942625f224b0f2, type: 2}
@@ -97,5 +99,3 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 0b7a2f1b529f8c846be25235813e725c, type: 2}
   - {fileID: 11400000, guid: 01633e1a0507caf47bb1f68f29993150, type: 2}
   - {fileID: 11400000, guid: 48700a3a90c407841bb59481a7addbec, type: 2}
-  - {fileID: 11400000, guid: 8fbf4fbfbe7612246886905138d78280, type: 2}
-  - {fileID: 11400000, guid: 995105428b85b314082a79c975348978, type: 2}
