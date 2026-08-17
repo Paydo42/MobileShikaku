@@ -24,6 +24,8 @@ public class LevelCompleteController : MonoBehaviour
     [SerializeField] private GameObject winButtons;
     [Tooltip("The Shikaku board this panel belongs to, so solve time can be read. Leave empty for modes without a solve timer.")]
     [SerializeField] private GridManager shikakuBoard;
+    [Tooltip("Optional: the XP bar on the win panel. Gets the before/after values so it can animate the gain.")]
+    [SerializeField] private XpRewardPanel xpPanel;
 
     [Header("Fail (optional)")]
     [Tooltip("Panel shown when the level is failed (e.g. time ran out). Hidden on start.")]
@@ -36,11 +38,16 @@ public class LevelCompleteController : MonoBehaviour
     [SerializeField] private GameObject boardToHide;
     [SerializeField] private string levelSelectSceneName = "LevelSelect";
 
+    private int _xpAwarded;
+
     private void Awake()
     {
         if (winPanel != null) winPanel.SetActive(false);
         if (failPanel != null) failPanel.SetActive(false);
     }
+
+    /// <summary>XP the just-finished level paid out; 0 if it was a replay.</summary>
+    public int XpAwarded => _xpAwarded;
 
     /// <summary>Call from the board's OnSolved event.</summary>
     public void OnLevelSolved()
@@ -48,14 +55,24 @@ public class LevelCompleteController : MonoBehaviour
         LevelDatabase db = LevelSession.SelectedDatabase;
         int index = LevelSession.SelectedLevel;
 
+        // Captured before the award so the XP bar knows where to slide from.
+        int xpBefore = PlayerLevel.TotalXp;
+
         if (db != null)
+        {
             LevelProgress.MarkSolved(db.modeId, index);
+            // Pays out only on the first clear; replays return 0.
+            _xpAwarded = PlayerLevel.AwardStage(db.modeId, index);
+        }
 
         bool hasNext = db != null && index + 1 < db.Count;
         if (nextButton != null) nextButton.interactable = hasNext;
 
         HideInGameViews();
         if (winPanel != null) winPanel.SetActive(true);
+
+        // After the panel is active, so the fill coroutine can run on it.
+        if (xpPanel != null) xpPanel.Play(xpBefore, _xpAwarded);
 
         // Buttons stay hidden until the result sentence has finished typing.
         if (winButtons != null) winButtons.SetActive(false);

@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 /// <summary>
 /// Translates pointer input (mouse or single touch) into Shikaku rectangle
@@ -30,11 +31,16 @@ public class PlayerController : MonoBehaviour
     {
         if (grid == null || cam == null) return;
 
-        if (Input.GetMouseButtonDown(0))
+        // Pointer.current is the mouse on desktop and the touchscreen on device,
+        // so one path covers both. It's null when neither is present.
+        Pointer pointer = Pointer.current;
+        if (pointer == null) return;
+
+        if (pointer.press.wasPressedThisFrame)
             BeginDrag();
-        else if (_dragging && Input.GetMouseButton(0))
+        else if (_dragging && pointer.press.isPressed)
             UpdateDrag();
-        else if (_dragging && Input.GetMouseButtonUp(0))
+        else if (_dragging && pointer.press.wasReleasedThisFrame)
             EndDrag();
     }
 
@@ -74,7 +80,7 @@ public class PlayerController : MonoBehaviour
 
     private Vector3 PointerWorld()
     {
-        Vector3 screen = Input.mousePosition;
+        Vector3 screen = Pointer.current.position.ReadValue(); // Update checked it exists
         screen.z = -cam.transform.position.z;   // distance to the z = 0 play plane
         return cam.ScreenToWorldPoint(screen);
     }

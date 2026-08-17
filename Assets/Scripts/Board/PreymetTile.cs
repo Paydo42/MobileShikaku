@@ -32,4 +32,15 @@ public class PreymetTile : MonoBehaviour
     {
         if (background != null) background.color = color;
     }
+
+    /// <summary>
+    /// Puts this tile's label at a given draw order. Amus draws wires over the
+    /// tiles, so it lifts the endpoint letters above them to keep them readable.
+    /// </summary>
+    public void SetLabelOrder(int sortingOrder)
+    {
+        if (label == null) return;
+        var labelRenderer = label.GetComponent<Renderer>();
+        if (labelRenderer != null) labelRenderer.sortingOrder = sortingOrder;
+    }
 }

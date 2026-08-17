@@ -13,11 +13,22 @@ public class LocalizedText : MonoBehaviour
     [SerializeField] private string key;
     [SerializeField] private TMP_Text label;
 
-    private void Reset() => label = GetComponent<TMP_Text>();
+    private void Reset() => label = FindLabel();
 
     private void Awake()
     {
-        if (label == null) label = GetComponent<TMP_Text>();
+        if (label == null) label = FindLabel();
+        if (label == null)
+            Debug.LogWarning($"LocalizedText on '{name}': no TMP text on this object or its children.", this);
+    }
+
+    // Toggles and buttons keep their text on a child ("Label"), so when this
+    // component sits on the control's root there is nothing to find on the root
+    // itself. Inactive children count too, since options panels start hidden.
+    private TMP_Text FindLabel()
+    {
+        var own = GetComponent<TMP_Text>();
+        return own != null ? own : GetComponentInChildren<TMP_Text>(true);
     }
 
     private void OnEnable()

@@ -292,7 +292,9 @@ public class GridManager : MonoBehaviour
         if (_solved) return; // board is locked during/after the win sequence
         _previewBounds = BoundsFrom(Clamp(a), Clamp(b));
         _previewValid = IsValidBounds(_previewBounds, out _previewClue);
-        RefreshColors();
+        // No RefreshColors here: this runs every frame of a drag, and tile
+        // colour depends only on the clue grid, which never changes after Build.
+        // Re-tinting every tile per frame just dirties the sprite batch.
         UpdateSelectionBox(_previewBounds);
     }
 
@@ -345,10 +347,17 @@ public class GridManager : MonoBehaviour
 
         if (record) _history.Push(rect);
 
-        if (playSound && SoundManager.Instance != null)
+        if (playSound)
         {
-            if (rect.valid) SoundManager.Instance.PlayRectValid();
-            else SoundManager.Instance.PlayRectPlace();
+            // Haptics are separate from sound: a player with audio off should
+            // still feel a rectangle land.
+            Haptics.Tick();
+
+            if (SoundManager.Instance != null)
+            {
+                if (rect.valid) SoundManager.Instance.PlayRectValid();
+                else SoundManager.Instance.PlayRectPlace();
+            }
         }
 
         CheckSolved();

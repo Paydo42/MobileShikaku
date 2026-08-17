@@ -20,6 +20,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Preymet.unity
     guid: 16afafa56716aab4b85e347064314b55
+  - enabled: 1
+    path: Assets/Scenes/Amus.unity
+    guid: 9d37719bc8d8edb4ca79fbee1e18d00c
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
   m_UseUCBPForAssetBundles: 0

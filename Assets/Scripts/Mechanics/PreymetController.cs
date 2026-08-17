@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 /// <summary>
 /// Pointer input for Preymet: press the Start cell (or any cell already on the
@@ -23,17 +24,22 @@ public class PreymetController : MonoBehaviour
     {
         if (board == null || cam == null) return;
 
-        if (Input.GetMouseButtonDown(0))
+        // Pointer.current is the mouse on desktop and the touchscreen on device,
+        // so one path covers both. It's null when neither is present.
+        Pointer pointer = Pointer.current;
+        if (pointer == null) return;
+
+        if (pointer.press.wasPressedThisFrame)
         {
             if (board.TryWorldToCell(PointerWorld(), out Vector2Int cell))
                 _dragging = board.BeginPath(cell);
         }
-        else if (_dragging && Input.GetMouseButton(0))
+        else if (_dragging && pointer.press.isPressed)
         {
             if (board.TryWorldToCell(PointerWorld(), out Vector2Int cell))
                 board.StepTo(cell);
         }
-        else if (_dragging && Input.GetMouseButtonUp(0))
+        else if (_dragging && pointer.press.wasReleasedThisFrame)
         {
             board.EndPath();
             _dragging = false;
@@ -42,7 +48,7 @@ public class PreymetController : MonoBehaviour
 
     private Vector3 PointerWorld()
     {
-        Vector3 screen = Input.mousePosition;
+        Vector3 screen = Pointer.current.position.ReadValue(); // Update checked it exists
         screen.z = -cam.transform.position.z; // distance to the z = 0 play plane
         return cam.ScreenToWorldPoint(screen);
     }

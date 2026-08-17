@@ -18,6 +18,18 @@ public static class LevelProgress
     public static bool IsUnlocked(string modeId, int index) =>
         index < GetUnlockedCount(modeId);
 
+    /// <summary>
+    /// The level to drop the player straight into for a mode: the furthest one
+    /// they've unlocked but not yet finished. Solving level N unlocks N+1, so
+    /// finishing 31 and quitting resumes at 32, while leaving 31 unfinished
+    /// resumes at 31. Once every level is solved this clamps to the last one.
+    /// </summary>
+    public static int GetCurrentLevel(string modeId, int levelCount)
+    {
+        if (levelCount <= 0) return 0;
+        return Mathf.Clamp(GetUnlockedCount(modeId) - 1, 0, levelCount - 1);
+    }
+
     /// <summary>Record a level as solved, unlocking the next one.</summary>
     public static void MarkSolved(string modeId, int index)
     {

@@ -63,7 +63,10 @@ MonoBehaviour:
     turkish: "B\xF6l\xFCm"
   - key: win_summary
     english: You completed {0} in {1} seconds
-    turkish: "{0} b\xF6l\xFCm\xFCn\xFC {1} saniyede tamamlad\u0131n"
+    turkish: "{0}  {1} saniyede tamamlad\u0131n"
   - key: win_summary_no_time
     english: You completed {0}
     turkish: "{0} b\xF6l\xFCm\xFCn\xFC tamamlad\u0131n"
+  - key: haptics
+    english: Vibration
+    turkish: "Titre\u015Fim"

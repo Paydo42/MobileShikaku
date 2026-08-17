@@ -203,7 +203,7 @@ public class PreymetBoard : MonoBehaviour
             _path.Clear();
             _path.Add(_start);
             RefreshColors();
-            PlayStepSound(backtrack: false);
+            PlayStepFeedback(backtrack: false);
             return true;
         }
 
@@ -213,7 +213,7 @@ public class PreymetBoard : MonoBehaviour
             int removed = _path.Count - existing - 1;
             _path.RemoveRange(existing + 1, removed);
             RefreshColors();
-            if (removed > 0) PlayStepSound(backtrack: true);
+            if (removed > 0) PlayStepFeedback(backtrack: true);
             return true;
         }
 
@@ -236,7 +236,7 @@ public class PreymetBoard : MonoBehaviour
         {
             _path.RemoveAt(_path.Count - 1);
             RefreshColors();
-            PlayStepSound(backtrack: true);
+            PlayStepFeedback(backtrack: true);
             return;
         }
 
@@ -248,7 +248,7 @@ public class PreymetBoard : MonoBehaviour
 
         _path.Add(cell);
         RefreshColors();
-        PlayStepSound(backtrack: false);
+        PlayStepFeedback(backtrack: false);
         CheckSolved();
     }
 
@@ -256,8 +256,12 @@ public class PreymetBoard : MonoBehaviour
 
     // Pitch climbs from 1 toward (1 + pitchRise) as the path nears the target,
     // so the player can hear whether the count is on track.
-    private void PlayStepSound(bool backtrack)
+    private void PlayStepFeedback(bool backtrack)
     {
+        // Ahead of the sound check: a player with audio off should still feel
+        // the path move cell to cell.
+        Haptics.Tick(backtrack ? 15 : 25);
+
         if (SoundManager.Instance == null) return;
 
         float pitch = 1f;
