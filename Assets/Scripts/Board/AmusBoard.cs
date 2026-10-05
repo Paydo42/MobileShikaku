@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Events;
@@ -20,8 +21,15 @@ using UnityEngine.Events;
 ///   * A wire that has reached its far endpoint is terminal: it can only be
 ///     backed out of or restarted, never extended.
 /// Releasing mid-wire keeps the partial wire; grabbing an endpoint restarts
-/// that colour from scratch. The level is solved when every pair is connected
-/// (and, if the level asks for it, every open cell is covered).
+/// that colour from scratch. The level is solved when every pair is connected,
+/// no wire touches itself, and (if the level asks for it) every open cell is
+/// covered.
+///
+/// No touching: a wire may not run alongside itself, double back against
+/// itself or wrap around a cell (two of its cells side by side that aren't
+/// consecutive steps). The player is free to draw that, but those parts merge
+/// into one solid block, and the level can't be finished until the wire is
+/// re-routed; when it's otherwise complete, the offending wires blink.
 ///
 /// Erase, connect and win effects live in <see cref="AmusFx"/>, added
 /// automatically. The win effect plays before <see cref="OnSolved"/> fires,
@@ -66,7 +74,13 @@ public class AmusBoard : MonoBehaviour
     [SerializeField] private Color blockedColor = new(0.20f, 0.20f, 0.24f);
     [Tooltip("One colour per pair, in the order the pairs appear in the level text. Wraps around if there are more pairs than colours.")]
     [SerializeField]
-    private Color[] palette =
+    private Color[] palette = (Color[])DefaultPalette.Clone();
+
+    /// <summary>
+    /// The standard pair colours, most distinct first: the first eight are the
+    /// originals, the rest keep pairs 9-16 from repeating them.
+    /// </summary>
+    public static readonly Color[] DefaultPalette =
     {
         new(0.86f, 0.24f, 0.22f), // red
         new(0.25f, 0.45f, 0.90f), // blue
@@ -76,6 +90,14 @@ public class AmusBoard : MonoBehaviour
         new(0.95f, 0.55f, 0.25f), // orange
         new(0.35f, 0.80f, 0.85f), // cyan
         new(0.60f, 0.40f, 0.85f), // purple
+        new(0.55f, 0.34f, 0.18f), // brown
+        new(0.62f, 0.86f, 0.22f), // lime
+        new(0.14f, 0.22f, 0.52f), // navy
+        new(0.05f, 0.53f, 0.53f), // teal
+        new(0.52f, 0.10f, 0.20f), // maroon
+        new(0.78f, 0.08f, 0.50f), // magenta
+        new(0.80f, 0.68f, 0.48f), // tan
+        new(0.50f, 0.52f, 0.56f), // grey
     };
     [Tooltip("Also tint the tiles a wire crosses. Off = the trail alone shows the wire, which is the cleaner look.")]
     [SerializeField] private bool tintCells = false;
@@ -114,6 +136,8 @@ public class AmusBoard : MonoBehaviour
     [SerializeField] private float pitchRise = 0.4f;
     [Tooltip("On levels that must be filled: the still-empty tiles pulse this colour when every pair is joined but the board isn't full yet.")]
     [SerializeField] private Color unfilledFlashColor = new(1f, 0.8f, 0.45f);
+    [Tooltip("Wires that touch themselves blink toward this colour when every pair is joined, showing why the level isn't finished.")]
+    [SerializeField] private Color selfTouchFlashColor = new(0.12f, 0.12f, 0.16f);
 
     [Header("Lock helper look")]
     [Tooltip("Stripe drawn down the middle of a locked wire.")]
@@ -155,10 +179,20 @@ public class AmusBoard : MonoBehaviour
     private AmusWire[] _lockViews;
     private List<Vector2Int>[] _solution; // one correct wire per pair, a -> b; null until known
     private Task<int[][]> _solveTask;
+    private readonly CancellationTokenSource _solveCancel = new(); // stops the solve if the board goes away
     private readonly Stack<List<Vector2Int>[]> _history = new(); // wires before each undoable move
     private List<Vector2Int>[] _dragStart; // wires when the current drag began
     private Coroutine _unfilledFlash;
-    private bool _warnedUnfilled;
+    private bool _warnedUnfinished; // the "why isn't this a win" flash already played
+
+    // No-touching rule: the pieces that merge a wire where it touches itself.
+    private readonly List<AmusWire> _touchViews = new();
+    private readonly List<Color> _touchColors = new(); // each piece's own colour, to blink from
+    private readonly List<Vector3> _piecePoints = new();
+    private int _touchViewsUsed;
+    private bool[] _touchingWire; // per pair, as last drawn
+    private int[] _stepAt;        // scratch: each cell's step along the wire being checked, -1 off it
+    private Coroutine _touchFlash;
 
     /// <summary>Number of colour pairs in this level (for the HUD).</summary>
     public int TotalPairs => _pairs?.Count ?? 0;
@@ -185,6 +219,8 @@ public class AmusBoard : MonoBehaviour
     public bool IsFinished => _finished;
 
     private void Start() => Build();
+
+    private void OnDestroy() => _solveCancel.Cancel();
 
     private void Update()
     {
@@ -221,6 +257,9 @@ public class AmusBoard : MonoBehaviour
         for (int p = 0; p < _pairs.Count; p++) _wires[p] = new List<Vector2Int>();
         _locked = new bool[_pairs.Count];
         _lockViews = new AmusWire[_pairs.Count];
+        _touchingWire = new bool[_pairs.Count];
+        _stepAt = new int[_width * _height];
+        for (int i = 0; i < _stepAt.Length; i++) _stepAt[i] = -1;
 
         _tiles = new PreymetTile[_width, _height];
 
@@ -710,17 +749,18 @@ public class AmusBoard : MonoBehaviour
             endpoints[p * 2 + 1] = _pairs[p].b.y * width + _pairs[p].b.x;
         }
         bool fill = puzzle.mustFillBoard;
+        CancellationToken cancel = _solveCancel.Token;
 
         _solveTask = Task.Run(() =>
         {
             AmusSolver.Outcome outcome = AmusSolver.Solve(width, height, blocked, endpoints, fill,
-                SolverConflictBudget, out int[][] wires, out _);
+                SolverConflictBudget, out int[][] wires, out _, cancel: cancel);
 
             // A level flagged "fill" that can't be filled still gets hints
             // for joining the pairs.
             if (outcome == AmusSolver.Outcome.NoSolution && fill)
                 outcome = AmusSolver.Solve(width, height, blocked, endpoints, false,
-                    SolverConflictBudget, out wires, out _);
+                    SolverConflictBudget, out wires, out _, cancel: cancel);
 
             return outcome == AmusSolver.Outcome.Solved ? wires : null;
         });
@@ -765,7 +805,6 @@ public class AmusBoard : MonoBehaviour
         if (!isActiveAndEnabled) return;
         if (_unfilledFlash != null) StopCoroutine(_unfilledFlash);
         _unfilledFlash = StartCoroutine(FlashEmptyTilesRoutine());
-        Haptics.Tick(40);
     }
 
     // Two soft pulses on the tiles no wire covers yet.
@@ -802,18 +841,23 @@ public class AmusBoard : MonoBehaviour
         for (int p = 0; p < TotalPairs; p++)
         {
             if (IsConnected(p)) continue;
-            _warnedUnfilled = false;
+            _warnedUnfinished = false;
             return;
         }
 
-        if (puzzle.mustFillBoard && HasEmptyCell())
+        // Every pair is joined, but it's only a win with no wire touching
+        // itself and, if the level asks, the board full. If not, show the
+        // player why, once per time they get here.
+        bool unfilled = puzzle.mustFillBoard && HasEmptyCell();
+        bool touching = AnyWireTouchesItself();
+        if (unfilled || touching)
         {
-            // Every pair is joined but it isn't a win yet: show the player why,
-            // once per time they get here.
-            if (!_warnedUnfilled)
+            if (!_warnedUnfinished)
             {
-                _warnedUnfilled = true;
-                FlashEmptyTiles();
+                _warnedUnfinished = true;
+                if (unfilled) FlashEmptyTiles();
+                if (touching) FlashSelfTouches();
+                Haptics.Tick(40);
             }
             return;
         }
@@ -860,6 +904,8 @@ public class AmusBoard : MonoBehaviour
                 _pointBuffer.Add(CellToWorld(cell));
             _wireViews[p].SetPoints(_pointBuffer);
         }
+
+        DrawSelfTouches();
     }
 
     private Color PairColor(int p) => palette.Length > 0 ? palette[p % palette.Length] : Color.white;
@@ -880,6 +926,126 @@ public class AmusBoard : MonoBehaviour
         }
 
         return emptyColor;
+    }
+
+    #endregion
+
+    #region No-touching rule
+
+    private bool AnyWireTouchesItself()
+    {
+        foreach (List<Vector2Int> wire in _wires)
+            if (AmusPuzzle.TouchesItself(wire)) return true;
+        return false;
+    }
+
+    // Where a wire touches itself its parts merge: a bar joins each pair of
+    // side-by-side cells that aren't consecutive steps, and every 2x2 block the
+    // wire fully covers is filled in, so that stretch reads as one solid block.
+    private void DrawSelfTouches()
+    {
+        StopTouchFlash(); // the wires changed; a blink in progress may be stale
+        _touchViewsUsed = 0;
+        float thickness = cellSize * wireWidth;
+
+        for (int p = 0; p < _wires.Length; p++)
+        {
+            List<Vector2Int> wire = _wires[p];
+            _touchingWire[p] = false;
+            if (wire.Count < 4) continue; // too short to touch itself
+
+            for (int i = 0; i < wire.Count; i++) _stepAt[wire[i].y * _width + wire[i].x] = i;
+
+            Color color = PairColor(p);
+            for (int i = 0; i < wire.Count; i++)
+            {
+                Vector2Int cell = wire[i];
+
+                // Each side-by-side pair once: look right and up.
+                for (int side = 0; side < 2; side++)
+                {
+                    Vector2Int next = cell + (side == 0 ? Vector2Int.right : Vector2Int.up);
+                    int j = StepAt(next);
+                    if (j < 0 || Mathf.Abs(i - j) == 1) continue;
+                    _touchingWire[p] = true;
+                    DrawTouchPiece(color, thickness, wireRoundness, CellToWorld(cell), CellToWorld(next));
+                }
+
+                // A 2x2 block all on this wire: fill the square between the four centres.
+                if (StepAt(cell + Vector2Int.right) >= 0 && StepAt(cell + Vector2Int.up) >= 0 &&
+                    StepAt(cell + Vector2Int.one) >= 0)
+                {
+                    Vector3 leftMiddle = CellToWorld(cell) + new Vector3(0f, cellSize * 0.5f, 0f);
+                    DrawTouchPiece(color, cellSize, 0, leftMiddle, leftMiddle + new Vector3(cellSize, 0f, 0f));
+                }
+            }
+
+            foreach (Vector2Int cell in wire) _stepAt[cell.y * _width + cell.x] = -1;
+        }
+
+        for (int k = _touchViewsUsed; k < _touchViews.Count; k++) _touchViews[k].SetPoints(null);
+    }
+
+    private int StepAt(Vector2Int cell) => InBounds(cell) ? _stepAt[cell.y * _width + cell.x] : -1;
+
+    // One merge piece: a straight stroke in the wire's colour and material.
+    // Bars use the wire's thickness and round ends; squares are a stroke one
+    // cell thick with flat ends.
+    private void DrawTouchPiece(Color color, float width, int roundness, Vector3 from, Vector3 to)
+    {
+        if (_touchViewsUsed == _touchViews.Count)
+        {
+            _touchViews.Add(AmusWire.Create($"Touch_{_touchViews.Count}", _parent));
+            _touchColors.Add(color);
+        }
+
+        _touchColors[_touchViewsUsed] = color;
+        AmusWire piece = _touchViews[_touchViewsUsed++];
+        piece.Configure(wireMaterial, color, width, roundness, sortingLayer, wireSortingOrder);
+        _piecePoints.Clear();
+        _piecePoints.Add(from);
+        _piecePoints.Add(to);
+        piece.SetPoints(_piecePoints);
+    }
+
+    private void FlashSelfTouches()
+    {
+        if (!isActiveAndEnabled) return;
+        StopTouchFlash();
+        _touchFlash = StartCoroutine(FlashSelfTouchesRoutine());
+    }
+
+    // Two blinks on every wire that touches itself, merged parts included.
+    private IEnumerator FlashSelfTouchesRoutine()
+    {
+        const float duration = 0.8f;
+        for (float t = 0f; t < duration; t += Time.deltaTime)
+        {
+            float pulse = 0.7f * Mathf.Abs(Mathf.Sin(t / duration * Mathf.PI * 2f));
+            for (int p = 0; p < _wireViews.Length; p++)
+                if (_touchingWire[p]) _wireViews[p].SetColor(Color.Lerp(PairColor(p), selfTouchFlashColor, pulse));
+            for (int k = 0; k < _touchViewsUsed; k++)
+                _touchViews[k].SetColor(Color.Lerp(_touchColors[k], selfTouchFlashColor, pulse));
+            yield return null;
+        }
+
+        _touchFlash = null;
+        RestoreTouchColors();
+    }
+
+    private void StopTouchFlash()
+    {
+        if (_touchFlash == null) return;
+        StopCoroutine(_touchFlash);
+        _touchFlash = null;
+        RestoreTouchColors();
+    }
+
+    private void RestoreTouchColors()
+    {
+        for (int p = 0; p < _wireViews.Length; p++)
+            if (_touchingWire[p]) _wireViews[p].SetColor(PairColor(p));
+        for (int k = 0; k < _touchViewsUsed; k++) _touchViews[k].SetColor(_touchColors[k]);
     }
 
     #endregion

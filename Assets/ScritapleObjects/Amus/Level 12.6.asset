@@ -15,7 +15,47 @@ MonoBehaviour:
   levelName: 
   mustFillBoard: 1
   timeLimitSeconds: 0
-  grid: ". . . . . . . . . . . . \n. . . . . . . . . . . . \n. . . . . . . . . 5
-    . .\n. . . 2 . . . . . 3 . .\n. . . . . . . 7 . . . . \n. . . 3 . . . . . . .
-    .\n. 1 . . . . . . 8 . . . .\n. . . . . . . . 6 4 . .\n. . . . 4 . . . . . .
-    .\n. . . . . . 2 . . . . .\n. 1 . . . 5 6 8 7 . . .\n. . . . . . . 9 . . . 9"
+  grid: 'A . B . . . . . . . . .
+
+    C . . . . D . . . . E .
+
+    . . D . . . F
+    . F . . .
+
+    G . E . . . . . . . . .
+
+    . . . . . . . . . H . .
+
+    . .
+    . . . A . . . . . .
+
+    . . . . . . . . . G . .
+
+    B . . . . . . . . . . .
+
+    .
+    . . . . . . . H . . .
+
+    . . . . . C . . . . . .
+
+    . . . . . . . . . . .
+    .
+
+    I . I . . . . . . . . .'
+  solution: 'A:RDRRRDRDDD
+
+    B:RRRRRRRRRDDDDDDDDDDDLLLLLLLLULLLUUU
+
+    C:DRDDDRDDDRRRD
+
+    D:RRRRDDLLLDDDLLUUULUL
+
+    E:DDDDLLDDRDDLLLUULLLUUULU
+
+    F:RR
+
+    G:DDDRDDDRRRDRRRRRRUUUUL
+
+    H:LLDDDDR
+
+    I:RR'

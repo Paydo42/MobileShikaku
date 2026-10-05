@@ -13,24 +13,38 @@ MonoBehaviour:
   m_Name: Level 10.7
   m_EditorClassIdentifier: 
   levelName: 
-  mustFillBoard: 0
+  mustFillBoard: 1
   timeLimitSeconds: 0
-  grid: '. . . . . . . . . F
+  grid: '. . . . . . . . . .
 
-    . . . . . . . . . .
+    . . . . . A B . C D
 
-    . . A . . . . C . .
+    . . . . . . . . . E
 
     .
-    . . . . . . D . .
+    . . . . . . . . B
 
-    . . . . A . . B E F
+    . . . . F . . . . .
 
-    . . . . . . . . . C
+    . . . . . . . . F .
 
     . .
-    . . . . . . . D
+    . . . . . . . .
 
-    . . . . . . . . . .
+    . . D . . . . E . .
 
-    . . . . . . . . . .'
+    . . A . . C . . . .
+
+    . . .
+    . . . . . . .'
+  solution: 'A:LLLLDDDDDDDR
+
+    B:DLLLLDDDDRRDDDRRRRRUUUUUU
+
+    C:LDDLLLLDDRRDDD
+
+    D:ULLLLLLLLLDDDDDDDDDRRRUUL
+
+    E:LDDLDDD
+
+    F:RRDDDDRRUUU'

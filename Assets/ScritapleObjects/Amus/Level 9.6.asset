@@ -13,8 +13,21 @@ MonoBehaviour:
   m_Name: Level 9.6
   m_EditorClassIdentifier: 
   levelName: 
-  mustFillBoard: 0
+  mustFillBoard: 1
   timeLimitSeconds: 0
   grid: "A . . . . . B C A \n. . D . . C . . .\n. . . . . . . . .\n. . E . . . .
     . .\n. . . . G . . . .\n. . . . F . . . .\n. . . . E . . B . \n. . . . G . .
     F .\n. . D . . . . . ."
+  solution: 'A:RRRDDLLDDDDDRRDRRRRRUUUUUUUU
+
+    B:LLDDRRRDDDD
+
+    C:DLL
+
+    D:LLDDDDDDDRR
+
+    E:DDDRR
+
+    G:RDDDL
+
+    F:LUURRRDDDDR'

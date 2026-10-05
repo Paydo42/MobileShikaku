@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Level 6.7
   m_EditorClassIdentifier: 
   levelName: 
-  mustFillBoard: 0
+  mustFillBoard: 1
   timeLimitSeconds: 0
   grid: '. . . . . C
 
@@ -27,3 +27,10 @@ MonoBehaviour:
     B . . .
 
     . . . . . D'
+  solution: 'C:LDDD
+
+    B:LDDDR
+
+    A:DDDLLULU
+
+    D:UULLLDDDDDRRRRR'

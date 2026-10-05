@@ -13,31 +13,44 @@ MonoBehaviour:
   m_Name: Level 11.2
   m_EditorClassIdentifier: 
   levelName: 
-  mustFillBoard: 0
+  mustFillBoard: 1
   timeLimitSeconds: 0
-  grid: '. C D . . . . . . . .
+  grid: '. . . . . . . . . . .
 
-    . . . . . . . . . . .
+    . . . . . . . . . A .
 
-    . . . . . F . . .
+    B C . . . . . . .
     . .
 
-    . . . . . G . . . . .
+    . . . D . . E . C . .
 
-    . . . . . . C . . . .
+    . D . . F . . . . . .
 
-    . D . . . G .
-    . F . .
+    . B G . . . .
+    . . H .
 
-    . . . . . . B . . . .
+    . . . . H . . . . . .
 
-    A . . . . . . . . . .
+    . . . . . A G . . . .
 
-    B E . . .
-    . . . . . .
-
-    . . E . . . . . . . A .
+    . . . . .
+    . . . E . .
 
     . . . . . . . . . . .
 
-'
+    . . . . . F . . . . .'
+  solution: 'A:DDDLLUULLDDDLLDDRR
+
+    B:UURRRRRRRRRRDDDDDDDDDDLLLLULLLLLUUUU
+
+    C:URRRRRRRDD
+
+    D:DLL
+
+    E:DDRRDDD
+
+    F:UULLDLLDDDDDDDRRRRR
+
+    G:DDDRRRRU
+
+    H:DDDDLLUUULLL'

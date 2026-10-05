@@ -19,3 +19,20 @@ MonoBehaviour:
     .\n. . . . . . . . . 8 . .\n. . . . . 7 . . . . . .\n. . . . . . . . . . . .
     \n. . . . . 6 . . . . . 3\n. . . . . . . . . . . 5 \n. . 3 . . . . . . . . .
     \n. . . . . . . . . 9 4 .\n. . . . . . . . . . . .\n1 . . . . . . . . . 1 9"
+  solution: '4:LLLLDDDDDDDDDDRRRRRRRRRRU
+
+    6:DDLLDDDDRR
+
+    5:LLLDDDDDDDDRRRRRRRUURRR
+
+    7:URRRRRDDDDDLLLLULL
+
+    2:RRRDDDLLULLLLDDRRDDLLLLUUUUU
+
+    8:RRRD
+
+    3:LLLLDDLLLLL
+
+    9:URRDDD
+
+    1:RRRRRRRRRR'

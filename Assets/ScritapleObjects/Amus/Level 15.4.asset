@@ -17,8 +17,27 @@ MonoBehaviour:
   timeLimitSeconds: 0
   grid: ". . . . . . . . . . . . . . 7\n. 1 . . . . . . . . . . . 8 10\n. . . . .
     3 5 . . . . . . . .\n. . . . . . . . . . . . . . .\n. . . . . . . . . . . . 3
-    . .\n. . . . . . 6 . 8 . . . 1 . .\n. . . . . . 7 . 8 . . . . . .\n. . . . .
+    . .\n. . . . . . 6 . 8 . . . 1 . .\n. . . . . . 7 . 9 . . . . . .\n. . . . .
     4 6 . . . . . . . .\n. . . . . . . 4 . . . . . 9 .\n. . . . . . . . . 10 . .
     2 . .\n. . . . . . . . . . . . . . .\n. . . . . . . . . . . 5 . . .\n. . . .
     . . . . . . . . . . .\n. 2 . . . . . . . . . . . . . \n. . . . . . . . . . .
     . . . ."
+  solution: '7:LLLLLLDDDDLLLDDR
+
+    1:DDDDDDDDDDDRRRRRRRRRRRUULUURUUU
+
+    8:LLLLDDDDL
+
+    10:DLLLLDDDDLDDD
+
+    3:LLDDDDDDDDRRRRRRRUUURUUUURRRDDDDLUUUL
+
+    5:ULLLLDDDDDDDDDDRRRRRRRRR
+
+    6:RDDL
+
+    9:DDDLLLLUUUUUURRRUUULLLLLLLDDDDDDDDDDDDDDRRRRRRRRRRRRRRUUUUUUL
+
+    4:DRR
+
+    2:RDDDDLLLLLLLLLLLL'

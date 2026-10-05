@@ -13,6 +13,11 @@ MonoBehaviour:
   m_Name: Level 5.10
   m_EditorClassIdentifier: 
   levelName: 
-  mustFillBoard: 0
+  mustFillBoard: 1
   timeLimitSeconds: 0
   grid: ". . . A .\n. A . B .\n. . C . . \n. . B . .\nC . . . ."
+  solution: 'A:RDDDDLLLUUU
+
+    B:DDL
+
+    C:UULLDDDD'

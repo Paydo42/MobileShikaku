@@ -13,17 +13,24 @@ MonoBehaviour:
   m_Name: Level 6.2
   m_EditorClassIdentifier: 
   levelName: 
-  mustFillBoard: 0
+  mustFillBoard: 1
   timeLimitSeconds: 0
-  grid: '. A . B . .
+  grid: '. . . . . .
 
-    . . . . . .
+    . A . . . .
 
-    . C . # . .
+    . . . B . .
 
-    . . # . C .
+    . A C . . .
 
-    .
-    . A . B .
+    D .
+    . . C .
 
-    . . . . . .'
+    B . D . . .'
+  solution: 'A:DD
+
+    B:DDLLDL
+
+    C:UURRDDD
+
+    D:UUUURRRRRDDDDDLLL'

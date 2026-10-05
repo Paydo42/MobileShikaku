@@ -13,27 +13,19 @@ MonoBehaviour:
   m_Name: Level 10.1
   m_EditorClassIdentifier: 
   levelName: 
-  mustFillBoard: 0
+  mustFillBoard: 1
   timeLimitSeconds: 0
-  grid: '. . . . . . . . . .
+  grid: ". . . . . . . . . .\nA . . . . . . . . .\nB . . . . . . . . .\n. . . D .
+    . F . . .\nC . B . . C . . . .\n. . E . . . . . . .\n. D . . . . . A . .\n. .
+    . E . . . . . . \n. . . . . . . . F .\n. . . . . . . . . ."
+  solution: 'A:URDDRUURDDRUURDDDLDDRDRR
 
-    A . . . . . . . . .
+    B:DRRD
 
-    B . . . . . . . . .
+    D:DDDRDRDLLLLUU
 
-    .
-    . . D . . F . . .
+    F:UUURDDDDRUUUURDDDDDDDDDLU
 
-    C . B . . C . . . .
+    C:RDLDDDDRRRRRRRULURRUULLUL
 
-    . . E . . . . . . .
-
-    . D
-    . . . . . A . .
-
-    . . . E . . . . . . .
-
-    . . . . . . . . F .
-
-    . .
-    . . . . . . . .'
+    E:DDR'

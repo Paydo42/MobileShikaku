@@ -20,7 +20,7 @@ MonoBehaviour:
     . 1 . . . . . 3 7 . . . .
 
     . 2 . . .
-    . . 1 . . . .8
+    . . 1 . . . . 8
 
     . . . 3 . 6 . . . . . . .
 
@@ -45,3 +45,18 @@ MonoBehaviour:
 
     . . . . . . . . .
     . . . .'
+  solution: '4:LLLLLDRDLDDR
+
+    8:RRDD
+
+    1:ULDDDDDDDDDDDDRUUUURRUURDRUURRDRRRRUULUULLL
+
+    3:LLLDDL
+
+    7:URDRRDDRDDDDLLDDDLLLLLLLDRRRRRRRRUUURDDDDLLLLLLLLLLUUURRRRRRRUU
+
+    2:DDDDDRUURRURRRRDRR
+
+    6:URDRRRD
+
+    5:DRRDLLLL'

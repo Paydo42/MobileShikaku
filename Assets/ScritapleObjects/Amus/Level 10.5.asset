@@ -13,27 +13,23 @@ MonoBehaviour:
   m_Name: Level 10.5
   m_EditorClassIdentifier: 
   levelName: 
-  mustFillBoard: 0
+  mustFillBoard: 1
   timeLimitSeconds: 0
-  grid: '. . . . B C . . . .
+  grid: ". . . . B C . . . .\n. D . . . . . . . .\n. . . . . . . . . .\nE . . . .
+    . . . . .\n. . . . . . . . . . \n. . . . G . . . . .\nH . . . . . . . . .\n.
+    . . . . F . . . .\n. . . . . . . . . .\nH E A . F G D A B C"
+  solution: 'B:DRRRRDDDDDDDD
 
-    . D . . . . . . . .
+    C:RRRRDDDDDDDDD
 
-    . . . . . . . . . .
+    D:RDDRRRRDDDDDD
 
-    E
-    . . . . . . . . .
+    E:DDRDDDD
 
-    . . . . . . . . . . .
+    G:DDDRD
 
-    . . . . G . . . . .
+    H:DDD
 
-    H
-    . . . . . . . . .
+    F:UUULLDDDDDR
 
-    . . . . . F . . . .
-
-    . . . . . . . . . .
-
-    H E
-    A . F G D A B C'
+    A:UUUUULUULUURRRDDRRRRDDDDDDD'

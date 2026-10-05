@@ -10,7 +10,8 @@ using UnityEngine;
 ///   A..Z      endpoint of a colour pair; each letter must appear exactly twice
 ///
 /// One row per line, top row first, cells separated by spaces. The player drags
-/// a wire between the two endpoints of each letter; wires may not share cells.
+/// a wire between the two endpoints of each letter; wires may not share cells,
+/// and a wire may not touch itself (see <see cref="TouchesItself"/>).
 /// For the classic look put one endpoint of each pair in the left column and
 /// the other in the right column, but any two cells work.
 /// </summary>
@@ -137,11 +138,34 @@ public class AmusPuzzle : PuzzleLevel
     }
 
     /// <summary>
+    /// The no-touching rule: true if two cells of the wire sit side by side
+    /// without being consecutive steps, i.e. the wire runs alongside itself,
+    /// doubles back against itself, or closes around a cell. A level can't be
+    /// finished while any wire does this.
+    /// </summary>
+    public static bool TouchesItself(List<Vector2Int> wire)
+    {
+        // Side-by-side cells of a grid path are an odd number of steps apart,
+        // so it takes at least four cells to touch.
+        if (wire.Count < 4) return false;
+
+        var index = new Dictionary<Vector2Int, int>(wire.Count);
+        for (int i = 0; i < wire.Count; i++) index[wire[i]] = i;
+        for (int i = 0; i < wire.Count; i++)
+        {
+            if (index.TryGetValue(wire[i] + Vector2Int.right, out int j) && Mathf.Abs(i - j) != 1) return true;
+            if (index.TryGetValue(wire[i] + Vector2Int.up, out j) && Mathf.Abs(i - j) != 1) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Reads <see cref="solution"/> back into one wire per pair (in
     /// <paramref name="pairs"/> order, each from <c>a</c> to <c>b</c>). False if
     /// it's empty or no longer fits the grid: a wire that leaves the board,
-    /// crosses a wall or another wire, or misses its endpoint, a missing pair,
-    /// or (with <paramref name="fill"/>) an open cell left uncovered.
+    /// crosses a wall or another wire, misses its endpoint or touches itself,
+    /// a missing pair, or (with <paramref name="fill"/>) an open cell left
+    /// uncovered.
     /// </summary>
     public bool TryDecodeSolution(List<Pair> pairs, bool[,] blocked, int width, int height, bool fill,
         out List<Vector2Int>[] wires)
@@ -189,7 +213,7 @@ public class AmusPuzzle : PuzzleLevel
                 used[cell.x, cell.y] = true;
                 wire.Add(cell);
             }
-            if (wire[^1] != pairs[p].b) return false;
+            if (wire[^1] != pairs[p].b || TouchesItself(wire)) return false;
             result[p] = wire;
         }
 

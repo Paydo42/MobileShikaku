@@ -15,38 +15,29 @@ MonoBehaviour:
   levelName: 
   mustFillBoard: 1
   timeLimitSeconds: 0
-  grid: ' . . . . . . . . 9 5 . . . . .
+  grid: ". . . . . . . . 9 5 . . . . .\n. 1 . . . . . . . . . . . 9 .\n. . . . .
+    . . . 7 . . . . . .\n. . . . 2 . . . 10 . . . . . .\n. . . . . . . . . . . .
+    . . .\n. . . . . . . 7 . 4 . . . . .\n. . . . . . . . . . . . . . .\n. . . .
+    . . . . 3 . . . . . .\n. . . . . 4 . . . . . . . . .\n. . . . . . . . . . . .
+    . . . \n. . . . . . 5 . . . . . 10 . .\n. . . . . . . . . . . . 6 . .\n. . .
+    . 3 . 6 8 . . . . 8 . .\n. . . . 1 . . . . . . . . . .\n. 2 . . . . . . . . .
+    . . . . "
+  solution: '9:DRRRRR
 
-    . 1 . . . . . . . . . . . 9 .
+    5:RRRRRDDDDDDDDDDDDDDLLLLLLLLLLLLULUUUUUUUUURRRRUULLLLLUURRRRRRRDDDDRRRRDDDDDDLLLLL
 
-    .
-    . . . . . . . 7 . . . . . .
+    1:RRRRRDDDDLLLLDDDDDDDRDR
 
-    . . . . 2 . . . 10 . . . . . .
+    7:RRRRRDDDDDDDDDDDLLLLLLLLUUULUUURRDRRRUULUL
 
-    . . . .
-    . . . . . . . . . . .
+    2:LLLLDDDDDDDDDDDR
 
-    . . . . . . . 7 . 4 . . . . .
+    10:RRRRDDDDDDD
 
-    . . . . . . . .
-    . . . . . . .
+    4:RDDDDLLLLLU
 
-    . . . . . . . . 3 . . . . . .
+    3:LULLLLDDDDDRD
 
-    . . . . . 4 . . . . . .
-    . .
+    6:LLLLLLD
 
-    .. . . . . . . . . . . . . . .
-
-    . . . . . . 5 . . . . . 10 . .
-
-    .
-    . . . . . . . . . . . 6 . .
-
-    . . . . 3 . 6 8 . . . . 8 . .
-
-    . . . . 1
-    . . . . . . . . . .
-
-    . 2 . . . . . . . . . . . . . '
+    8:RRRRR'

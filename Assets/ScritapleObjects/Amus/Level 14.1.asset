@@ -21,3 +21,22 @@ MonoBehaviour:
     . . .\n. . . . . . . . . . . . . .\n. . . . . . . 4 . . 10 . . .\n. . . . . 2
     6 7 . . 9 . . .\n. . 2 3 . . . 8 . . . . . .\n. . . 4 1 . . . . . . . . .\n.
     . . . . . . . . . . . . ."
+  solution: '1:DDDDDDDDDDDDDRRRRU
+
+    7:LLLLLLLLDDDDRRRDDRRDDL
+
+    6:RRRRRRRDDDDDDDDLLLLLLUU
+
+    9:DDRDDDR
+
+    8:RRDDDDDDLLLL
+
+    10:RDDD
+
+    5:LLUUUUUURRRRRRRRRRDDLLLLLLLLDDRRRDD
+
+    3:DLLLLUUUUUUUURRRRRRRRRRRRDDDDDDDDDDDDDLLLLLLLLUULL
+
+    4:LLLLLLDDDRR
+
+    2:LLLD'

@@ -13,12 +13,15 @@ MonoBehaviour:
   m_Name: Level 4.3
   m_EditorClassIdentifier: 
   levelName: 
-  mustFillBoard: 0
+  mustFillBoard: 1
   timeLimitSeconds: 0
   grid: 'A . . .
 
-    . # # .
+    . . . .
 
-    . B B .
+    . B . B
 
     . . . A'
+  solution: 'A:RRRDLLLDDRRR
+
+    B:RR'

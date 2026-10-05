@@ -34,9 +34,12 @@ public static class HelperCredits
     }
 
     /// <summary>Restore one pool to full (rewarded-ad payoff).</summary>
-    public static void Refill(Pool pool)
+    public static void Refill(Pool pool) => Set(pool, RefillAmount);
+
+    /// <summary>Set a pool to any count. For testing tools (Shikaku > Testing).</summary>
+    public static void Set(Pool pool, int uses)
     {
-        PlayerPrefs.SetInt(Key(pool), RefillAmount);
+        PlayerPrefs.SetInt(Key(pool), Mathf.Max(0, uses));
         PlayerPrefs.Save();
     }
 }

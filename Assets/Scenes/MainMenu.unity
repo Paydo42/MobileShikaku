@@ -3105,7 +3105,7 @@ MonoBehaviour:
   iosInterstitialId: Interstitial_iOS
   androidRewardedId: Rewarded_Android
   iosRewardedId: Rewarded_iOS
-  levelsPerInterstitial: 15
+  levelsPerInterstitial: 200
 --- !u!1 &1768835670
 GameObject:
   m_ObjectHideFlags: 0

@@ -1,9 +1,13 @@
+using System;
 using System.Collections.Generic;
+using System.Threading;
 
 /// <summary>
 /// Finds a solution to an Amus board: one wire per pair, no two wires sharing a
-/// cell and, with <c>fill</c> on, every open cell covered. Plain C# with no
-/// Unity types, so it can run on a worker thread and be tested outside Unity.
+/// cell, no wire touching itself (two of its cells side by side that aren't
+/// consecutive steps) and, with <c>fill</c> on, every open cell covered. Plain
+/// C# with no Unity types, so it can run on a worker thread and be tested
+/// outside Unity.
 ///
 /// The board is turned into a logic formula and handed to a small built-in SAT
 /// solver (the standard way to crack Numberlink-style puzzles; a plain
@@ -12,7 +16,9 @@ using System.Collections.Generic;
 ///   * a "link" between two neighbouring cells means they're consecutive on a
 ///     wire, and passes the colour along;
 ///   * an endpoint has exactly one link, every other cell exactly two (with
-///     fill off: zero or two, and coloured only if linked).
+///     fill off: zero or two, and coloured only if linked);
+///   * two neighbouring cells of the same colour must be linked: same colour
+///     but unlinked would be a wire touching itself.
 /// That formula also allows stray closed loops, so any loop in an answer is
 /// forbidden and the search runs again until the answer is loop-free.
 ///
@@ -32,11 +38,17 @@ public static class AmusSolver
     /// <paramref name="endpoints"/> holds each pair's two cells in turn
     /// (a0, b0, a1, b1, ...). On success <paramref name="wires"/> holds each
     /// pair's cells in order from its first endpoint to its second.
-    /// <paramref name="conflictBudget"/> bounds the work; running out reports
-    /// <see cref="Outcome.GaveUp"/>.
+    /// <paramref name="conflictBudget"/> bounds the work; running out, or
+    /// <paramref name="cancel"/> firing, reports <see cref="Outcome.GaveUp"/>.
+    /// With <paramref name="exclude"/> (a known answer, in the same form as
+    /// <paramref name="wires"/>) only a different answer counts, so
+    /// <see cref="Outcome.NoSolution"/> means that answer is the only one.
+    /// <paramref name="allowSelfTouch"/> lifts the no-touching rule; only the
+    /// level checker uses it, to explain why a level has no answer.
     /// </summary>
     public static Outcome Solve(int width, int height, bool[] blocked, int[] endpoints, bool fill,
-        int conflictBudget, out int[][] wires, out int conflicts)
+        int conflictBudget, out int[][] wires, out int conflicts,
+        int[][] exclude = null, CancellationToken cancel = default, bool allowSelfTouch = false)
     {
         wires = null;
         conflicts = 0;
@@ -144,6 +156,7 @@ public static class AmusSolver
             {
                 sat.AddClause(Sat.Neg(v), Sat.Neg(Colour(a, k)), Sat.Pos(Colour(b, k)));
                 sat.AddClause(Sat.Neg(v), Sat.Neg(Colour(b, k)), Sat.Pos(Colour(a, k)));
+                if (!allowSelfTouch) sat.AddClause(Sat.Neg(Colour(a, k)), Sat.Neg(Colour(b, k)), Sat.Pos(v));
             }
             if (!fill)
             {
@@ -157,10 +170,34 @@ public static class AmusSolver
             }
         }
 
+        // A different answer must drop at least one of the known answer's links:
+        // keeping them all pins every cell's links, so it would be the same answer.
+        if (exclude != null)
+        {
+            buffer.Clear();
+            foreach (int[] wire in exclude)
+            {
+                for (int s = 1; s < wire.Length; s++)
+                {
+                    int l = FindLink(wire[s - 1], wire[s]);
+                    if (l < 0) throw new ArgumentException("exclude: wire steps between cells that aren't linked");
+                    buffer.Add(Sat.Neg(Link(l)));
+                }
+            }
+            sat.AddClause(buffer);
+        }
+
+        int FindLink(int a, int b)
+        {
+            foreach (int l in incident[a])
+                if (linkA[l] == b || linkB[l] == b) return l;
+            return -1;
+        }
+
         // Solve; forbid any closed loop in the answer and go again.
         while (true)
         {
-            bool? answer = sat.Solve(conflictBudget - conflicts, ref conflicts);
+            bool? answer = sat.Solve(conflictBudget - conflicts, ref conflicts, cancel);
             if (answer == null) return Outcome.GaveUp;
             if (answer == false) return Outcome.NoSolution;
 
@@ -284,11 +321,25 @@ public static class AmusSolver
     /// A compact CDCL SAT solver (two watched literals, first-UIP clause
     /// learning, VSIDS ordering, phase saving, Luby restarts). Literal
     /// <c>2v</c> is variable v true, <c>2v+1</c> is v false.
+    /// Learnt clauses are thinned out regularly, keeping the ones that tie few
+    /// decision levels together; without that a hard board buries the solver
+    /// in millions of clauses and it slows to a crawl.
     /// </summary>
     private sealed class Sat
     {
+        private const int FirstReduce = 2000;    // conflicts before the first clean-up
+        private const int ReduceGrowth = 300;    // and how much later each next one comes
+        private const int KeepGlue = 2;          // learnt clauses this tight are never dropped
+
         private readonly int _vars;
-        private readonly List<int[]> _clauses = new();
+        private readonly List<int[]> _clauses = new(); // null once deleted; indices are never reused
+        private readonly List<int> _glue = new();      // per clause: decision levels it spans when learnt (0 = original)
+        private readonly List<int> _learnts = new();   // live learnt clauses
+        private int _conflictsSeen;
+        private int _nextReduce = FirstReduce;
+        private int _reduces;
+        private readonly int[] _levelStamp;            // per decision level, for counting a clause's levels
+        private int _stamp;
         private readonly List<int>[] _watches; // per literal: clauses watching it
         private readonly sbyte[] _value;       // per variable: 1 true, -1 false, 0 unset
         private readonly int[] _level;
@@ -325,6 +376,7 @@ public static class AmusSolver
             _heap = new int[vars];
             _heapIndex = new int[vars];
             _trail = new int[vars];
+            _levelStamp = new int[vars + 1];
             for (int v = 0; v < vars; v++)
             {
                 _reason[v] = -1;
@@ -373,13 +425,14 @@ public static class AmusSolver
                 if (Propagate() >= 0) _unsat = true;
                 return;
             }
-            AttachClause(clause.ToArray());
+            AttachClause(clause.ToArray(), 0);
         }
 
-        private int AttachClause(int[] clause)
+        private int AttachClause(int[] clause, int glue)
         {
             int index = _clauses.Count;
             _clauses.Add(clause);
+            _glue.Add(glue);
             _watches[clause[0]].Add(index);
             _watches[clause[1]].Add(index);
             return index;
@@ -387,11 +440,13 @@ public static class AmusSolver
 
         /// <summary>
         /// True with a model, false if unsatisfiable, null if the conflict
-        /// budget ran out. <paramref name="conflicts"/> accumulates across calls.
+        /// budget ran out or <paramref name="cancel"/> fired.
+        /// <paramref name="conflicts"/> accumulates across calls.
         /// </summary>
-        public bool? Solve(int budget, ref int conflicts)
+        public bool? Solve(int budget, ref int conflicts, CancellationToken cancel)
         {
             if (_unsat) return false;
+            if (cancel.IsCancellationRequested) return null;
             if (Propagate() >= 0)
             {
                 _unsat = true;
@@ -417,18 +472,33 @@ public static class AmusSolver
                         return false;
                     }
 
-                    int[] learnt = Analyze(conflict, out int backLevel);
+                    int[] learnt = Analyze(conflict, out int backLevel, out int glue);
                     Backtrack(backLevel);
-                    if (learnt.Length == 1) Enqueue(learnt[0], -1);
-                    else Enqueue(learnt[0], AttachClause(learnt));
+                    if (learnt.Length == 1)
+                    {
+                        Enqueue(learnt[0], -1);
+                    }
+                    else
+                    {
+                        int index = AttachClause(learnt, glue);
+                        _learnts.Add(index);
+                        Enqueue(learnt[0], index);
+                    }
                     _increment /= 0.95;
+                    _conflictsSeen++;
 
-                    if (used >= budget)
+                    if (used >= budget || ((used & 255) == 0 && cancel.IsCancellationRequested))
                     {
                         Backtrack(0);
                         return null;
                     }
                     continue;
+                }
+
+                if (_conflictsSeen >= _nextReduce)
+                {
+                    ReduceLearnts();
+                    _nextReduce += FirstReduce + ReduceGrowth * ++_reduces;
                 }
 
                 if (sinceRestart >= restartLimit)
@@ -468,6 +538,7 @@ public static class AmusSolver
                 {
                     int index = watchers[i++];
                     int[] clause = _clauses[index];
+                    if (clause == null) continue; // deleted: drop the stale watch
 
                     // Keep the falsified watch in slot 1.
                     if (clause[0] == falseLiteral)
@@ -510,8 +581,9 @@ public static class AmusSolver
         }
 
         // First-UIP learning: walk back along the trail until a single literal
-        // of the current level explains the conflict.
-        private int[] Analyze(int conflict, out int backLevel)
+        // of the current level explains the conflict. 'glue' is how many
+        // decision levels the learnt clause spans (lower = more useful).
+        private int[] Analyze(int conflict, out int backLevel, out int glue)
         {
             var learnt = new List<int> { -1 };
             int pending = 0;
@@ -545,10 +617,18 @@ public static class AmusSolver
 
             backLevel = 0;
             int best = 1;
+            glue = 1; // the asserting literal's level
+            _stamp++;
+            _levelStamp[DecisionLevel] = _stamp;
             for (int k = 1; k < learnt.Count; k++)
             {
                 int v = learnt[k] >> 1;
                 _seen[v] = false;
+                if (_levelStamp[_level[v]] != _stamp)
+                {
+                    _levelStamp[_level[v]] = _stamp;
+                    glue++;
+                }
                 if (_level[v] > backLevel)
                 {
                     backLevel = _level[v];
@@ -558,6 +638,42 @@ public static class AmusSolver
             // The deepest remaining literal becomes the second watch.
             if (learnt.Count > 1) (learnt[1], learnt[best]) = (learnt[best], learnt[1]);
             return learnt.ToArray();
+        }
+
+        // Drops the weaker half of the learnt clauses: those spanning the most
+        // decision levels, longest first. Tight ones (glue <= 2) stay for good,
+        // as does any clause that is currently the reason for an assignment.
+        private void ReduceLearnts()
+        {
+            _learnts.Sort((a, b) =>
+            {
+                int byGlue = _glue[b].CompareTo(_glue[a]);
+                return byGlue != 0 ? byGlue : _clauses[b].Length.CompareTo(_clauses[a].Length);
+            });
+
+            int toRemove = _learnts.Count / 2;
+            int kept = 0;
+            for (int i = 0; i < _learnts.Count; i++)
+            {
+                int index = _learnts[i];
+                if (toRemove > 0 && _glue[index] > KeepGlue && !IsReason(index))
+                {
+                    _clauses[index] = null;
+                    toRemove--;
+                }
+                else
+                {
+                    _learnts[kept++] = index;
+                }
+            }
+            _learnts.RemoveRange(kept, _learnts.Count - kept);
+        }
+
+        // A clause that forced its first literal is still needed to explain it.
+        private bool IsReason(int index)
+        {
+            int literal = _clauses[index][0];
+            return _reason[literal >> 1] == index && LiteralValue(literal) > 0;
         }
 
         private void Backtrack(int level)
