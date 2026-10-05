@@ -5,7 +5,9 @@ using UnityEngine;
 /// vibration suitable for UI and gameplay feedback (much lighter than
 /// Handheld.Vibrate's long buzz).
 ///
-/// Android: real short ticks via the native Vibrator service.
+/// Android: real short ticks via the native Vibrator service. On Android 13+
+///          they're tagged as media vibration, so the phone's "Touch feedback"
+///          setting doesn't mute them.
 /// iOS: no-op — light impact haptics need a native plugin; Handheld.Vibrate
 ///      would fire a full heavy buzz per tick, which feels wrong.
 /// Editor/desktop: no-op.
@@ -47,7 +49,9 @@ public static class Haptics
 
 #if UNITY_ANDROID && !UNITY_EDITOR
     private static AndroidJavaObject _vibrator;
+    private static AndroidJavaObject _attributes; // null below API 33, or if creating them failed
     private static int _sdk = -1;
+    private static bool _loggedFailure;
 
     private static bool EnsureVibrator()
     {
@@ -60,12 +64,47 @@ public static class Haptics
             using var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
             using var activity = player.GetStatic<AndroidJavaObject>("currentActivity");
             _vibrator = activity.Call<AndroidJavaObject>("getSystemService", "vibrator");
+            if (_sdk >= 33) _attributes = CreateMediaAttributes();
+
+            // One line in logcat, so a device with no vibration motor (most
+            // tablets) is obvious instead of looking like a code bug.
+            Debug.Log($"Haptics: Android API {_sdk}, hasVibrator={_vibrator.Call<bool>("hasVibrator")}.");
         }
-        catch
+        catch (System.Exception e)
         {
             _vibrator = null;
+            LogFailure("couldn't get the Vibrator service", e);
         }
         return _vibrator != null;
+    }
+
+    // Android 13+ files a short vibration with no usage as touch feedback, so a
+    // phone with "Touch feedback" (tap/keyboard vibration) switched off silently
+    // drops every tick. Tagged as media, ticks follow the "Media vibration"
+    // setting instead, which is on by default. The media usage only exists from
+    // Android 13, so older versions stay untagged.
+    private static AndroidJavaObject CreateMediaAttributes()
+    {
+        try
+        {
+            using var attributesClass = new AndroidJavaClass("android.os.VibrationAttributes");
+            return attributesClass.CallStatic<AndroidJavaObject>(
+                "createForUsage", attributesClass.GetStatic<int>("USAGE_MEDIA"));
+        }
+        catch (System.Exception e)
+        {
+            LogFailure("couldn't create media vibration attributes", e);
+            return null;
+        }
+    }
+
+    // Logged once: Tick fires on every drag step, and one line in logcat is
+    // enough to see why nothing buzzes.
+    private static void LogFailure(string what, System.Exception e)
+    {
+        if (_loggedFailure) return;
+        _loggedFailure = true;
+        Debug.LogWarning($"Haptics: {what}. {e}");
     }
 #endif
 
@@ -98,16 +137,18 @@ public static class Haptics
                 using var effectClass = new AndroidJavaClass("android.os.VibrationEffect");
                 using var effect = effectClass.CallStatic<AndroidJavaObject>(
                     "createOneShot", milliseconds, amplitude);
-                _vibrator.Call("vibrate", effect);
+                if (_attributes != null) _vibrator.Call("vibrate", effect, _attributes);
+                else _vibrator.Call("vibrate", effect);
             }
             else
             {
                 _vibrator.Call("vibrate", milliseconds);
             }
         }
-        catch
+        catch (System.Exception e)
         {
-            // Missing vibrator hardware or permission: silently do nothing.
+            // Missing vibrator hardware or permission: no buzz, but say why once.
+            LogFailure("vibrate failed", e);
         }
 #endif
     }

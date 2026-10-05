@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6010f075eb41f844a9be2bf9118f45dc, type: 3}
+  m_Name: Level 14.1
+  m_EditorClassIdentifier: 
+  levelName: 
+  mustFillBoard: 1
+  timeLimitSeconds: 0
+  grid: "1 . . . . . . . . . . . . . \n. . . . . . . . . . . . . .\n. . . . . . .
+    . . . . 7 . .\n. . . . . . . . . . . . . .\n. . . . . 6 . . . . . . . .\n. .
+    . . . . . . 9 8 . . . .\n. . . . . . . . . 10 . . . .\n. . . . 5 3 . 5 . . .
+    . . .\n. . . . . . . . . . . . . .\n. . . . . . . 4 . . 10 . . .\n. . . . . 2
+    6 7 . . 9 . . .\n. . 2 3 . . . 8 . . . . . .\n. . . 4 1 . . . . . . . . .\n.
+    . . . . . . . . . . . . ."

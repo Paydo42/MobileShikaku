@@ -18,6 +18,7 @@ public static class BoardArt
 
     private static Material _vertexColorMaterial;
     private static Sprite _circleSprite;
+    private static Sprite _glowSprite;
 
     /// <summary>
     /// An unlit transparent material that takes its colour from vertex colours,
@@ -59,39 +60,64 @@ public static class BoardArt
     {
         get
         {
-            if (_circleSprite != null) return _circleSprite;
-
-            const int size = CircleTextureSize;
-            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
-            {
-                name = "BoardArt Circle",
-                filterMode = FilterMode.Bilinear,
-                wrapMode = TextureWrapMode.Clamp,
-            };
-
-            float radius = size * 0.5f;
-            var pixels = new Color32[size * size];
-            for (int y = 0; y < size; y++)
-            {
-                for (int x = 0; x < size; x++)
-                {
-                    float dx = x + 0.5f - radius;
-                    float dy = y + 0.5f - radius;
-                    // Fade the last pixel of the radius out, so the rim is smooth.
-                    float alpha = Mathf.Clamp01(radius - Mathf.Sqrt(dx * dx + dy * dy));
-                    pixels[y * size + x] = new Color32(255, 255, 255, (byte)(alpha * 255f));
-                }
-            }
-
-            texture.SetPixels32(pixels);
-            texture.Apply();
-
-            // Pixels-per-unit = size makes the sprite exactly one world unit wide,
-            // so callers can scale it straight to the size they want.
-            _circleSprite = Sprite.Create(texture, new Rect(0, 0, size, size),
-                new Vector2(0.5f, 0.5f), size);
-            _circleSprite.name = "BoardArt Circle";
+            // Fade the last pixel of the radius out, so the rim is smooth.
+            if (_circleSprite == null)
+                _circleSprite = RadialSprite("BoardArt Circle",
+                    (distance, radius) => Mathf.Clamp01(radius - distance));
             return _circleSprite;
         }
+    }
+
+    /// <summary>
+    /// A white radial glow, one world unit across at scale 1: solid in the
+    /// middle and fading smoothly to clear at the rim. For sparks and puffs.
+    /// </summary>
+    public static Sprite GlowSprite
+    {
+        get
+        {
+            if (_glowSprite == null)
+                _glowSprite = RadialSprite("BoardArt Glow", (distance, radius) =>
+                {
+                    float k = Mathf.Clamp01(1f - distance / radius);
+                    return k * k;
+                });
+            return _glowSprite;
+        }
+    }
+
+    // A white, round sprite whose alpha is alphaAt(distance from centre, radius),
+    // both in pixels.
+    private static Sprite RadialSprite(string spriteName, System.Func<float, float, float> alphaAt)
+    {
+        const int size = CircleTextureSize;
+        var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+        {
+            name = spriteName,
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp,
+        };
+
+        float radius = size * 0.5f;
+        var pixels = new Color32[size * size];
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                float dx = x + 0.5f - radius;
+                float dy = y + 0.5f - radius;
+                float alpha = alphaAt(Mathf.Sqrt(dx * dx + dy * dy), radius);
+                pixels[y * size + x] = new Color32(255, 255, 255, (byte)(alpha * 255f));
+            }
+        }
+
+        texture.SetPixels32(pixels);
+        texture.Apply();
+
+        // Pixels-per-unit = size makes the sprite exactly one world unit wide,
+        // so callers can scale it straight to the size they want.
+        Sprite sprite = Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
+        sprite.name = spriteName;
+        return sprite;
     }
 }

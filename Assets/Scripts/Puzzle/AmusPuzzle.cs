@@ -32,6 +32,10 @@ public class AmusPuzzle : PuzzleLevel
         "C . . D\n" +
         "D . . C";
 
+    [TextArea(2, 12)]
+    [Tooltip("Written by Shikaku > Amus > Check Levels; used by the Lock helper. One line per pair: its symbol, ':', then steps R/L/U/D from its first endpoint. Empty = the game solves the level itself when it loads.")]
+    public string solution = "";
+
     /// <summary>One colour pair: the letter that marks it and its two endpoint cells.</summary>
     public struct Pair
     {
@@ -109,4 +113,96 @@ public class AmusPuzzle : PuzzleLevel
 
         return pairs;
     }
+
+    #region Solution text
+
+    /// <summary>
+    /// Writes wires (each from its pair's first endpoint <c>a</c> to <c>b</c>)
+    /// in the <see cref="solution"/> format.
+    /// </summary>
+    public static string EncodeSolution(List<Pair> pairs, List<Vector2Int>[] wires)
+    {
+        var text = new System.Text.StringBuilder();
+        for (int p = 0; p < pairs.Count; p++)
+        {
+            text.Append(pairs[p].symbol).Append(':');
+            for (int i = 1; i < wires[p].Count; i++)
+            {
+                Vector2Int step = wires[p][i] - wires[p][i - 1];
+                text.Append(step.x > 0 ? 'R' : step.x < 0 ? 'L' : step.y > 0 ? 'U' : 'D');
+            }
+            if (p < pairs.Count - 1) text.Append('\n');
+        }
+        return text.ToString();
+    }
+
+    /// <summary>
+    /// Reads <see cref="solution"/> back into one wire per pair (in
+    /// <paramref name="pairs"/> order, each from <c>a</c> to <c>b</c>). False if
+    /// it's empty or no longer fits the grid: a wire that leaves the board,
+    /// crosses a wall or another wire, or misses its endpoint, a missing pair,
+    /// or (with <paramref name="fill"/>) an open cell left uncovered.
+    /// </summary>
+    public bool TryDecodeSolution(List<Pair> pairs, bool[,] blocked, int width, int height, bool fill,
+        out List<Vector2Int>[] wires)
+    {
+        wires = null;
+        if (string.IsNullOrWhiteSpace(solution)) return false;
+
+        var steps = new Dictionary<string, string>();
+        foreach (string rawLine in solution.Replace("\r", "").Split('\n'))
+        {
+            string line = rawLine.Trim();
+            int colon = line.IndexOf(':');
+            if (colon <= 0) continue;
+            steps[line.Substring(0, colon).Trim().ToUpperInvariant()] = line.Substring(colon + 1).Trim();
+        }
+
+        var used = new bool[width, height];
+        var result = new List<Vector2Int>[pairs.Count];
+        for (int p = 0; p < pairs.Count; p++)
+        {
+            used[pairs[p].a.x, pairs[p].a.y] = true;
+            used[pairs[p].b.x, pairs[p].b.y] = true;
+        }
+
+        for (int p = 0; p < pairs.Count; p++)
+        {
+            if (!steps.TryGetValue(pairs[p].symbol, out string path)) return false;
+
+            var wire = new List<Vector2Int> { pairs[p].a };
+            Vector2Int cell = pairs[p].a;
+            for (int i = 0; i < path.Length; i++)
+            {
+                cell += path[i] switch
+                {
+                    'R' => Vector2Int.right,
+                    'L' => Vector2Int.left,
+                    'U' => Vector2Int.up,
+                    'D' => Vector2Int.down,
+                    _ => Vector2Int.zero,
+                };
+                bool last = i == path.Length - 1;
+                if (cell.x < 0 || cell.x >= width || cell.y < 0 || cell.y >= height) return false;
+                if (blocked[cell.x, cell.y]) return false;
+                if (last ? cell != pairs[p].b : used[cell.x, cell.y]) return false;
+                used[cell.x, cell.y] = true;
+                wire.Add(cell);
+            }
+            if (wire[^1] != pairs[p].b) return false;
+            result[p] = wire;
+        }
+
+        if (fill)
+        {
+            for (int x = 0; x < width; x++)
+                for (int y = 0; y < height; y++)
+                    if (!blocked[x, y] && !used[x, y]) return false;
+        }
+
+        wires = result;
+        return true;
+    }
+
+    #endregion
 }

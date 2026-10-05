@@ -37,7 +37,7 @@ public static class PlayerLevel
 {
     public const int MaxLevel = 100;
     public const int StagesPerMode = 100;
-    public const int ModeCount = 4;
+    public const int ModeCount = 3;
 
     private const int RewardBase = 20;
     private const int RewardStep = 1;

@@ -1,10 +1,10 @@
 using UnityEngine;
 
 /// <summary>
-/// Uses left for the Shikaku helper buttons. Hint and Solve All each have their
-/// own pool of 4; a press costs 1 from that pool only. When a pool is empty the
-/// only refill is watching a rewarded ad, which restores that pool to 4.
-/// Persisted in PlayerPrefs so it survives app restarts.
+/// Uses left for the helper buttons. Shikaku's Hint and Solve All and Amus's
+/// Lock each have their own pool of 4; a press costs 1 from that pool only.
+/// When a pool is empty the only refill is watching a rewarded ad, which
+/// restores that pool to 4. Persisted in PlayerPrefs so it survives app restarts.
 /// </summary>
 public static class HelperCredits
 {
@@ -15,6 +15,7 @@ public static class HelperCredits
     {
         Hint,
         SolveAll,
+        AmusLock, // Amus: lock one wire onto its correct path
     }
 
     private static string Key(Pool pool) => $"shikaku_helper_{pool}";

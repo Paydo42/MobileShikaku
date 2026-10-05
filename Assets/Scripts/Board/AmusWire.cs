@@ -66,6 +66,17 @@ public class AmusWire : MonoBehaviour
         line.positionCount = 0;
     }
 
+    /// <summary>Recolours the whole line. Vertex colour, so the material stays shared.</summary>
+    public void SetColor(Color color)
+    {
+        LineRenderer line = Line;
+        line.startColor = color;
+        line.endColor = color;
+    }
+
+    /// <summary>Sets the line's thickness in world units.</summary>
+    public void SetWidth(float width) => Line.widthMultiplier = width;
+
     /// <summary>
     /// Redraws the wire along <paramref name="points"/>. Fewer than two points
     /// means there's nothing to draw yet (the endpoint dot covers that case), so
