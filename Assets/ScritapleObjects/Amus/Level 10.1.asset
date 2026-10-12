@@ -18,14 +18,14 @@ MonoBehaviour:
   grid: ". . . . . . . . . .\nA . . . . . . . . .\nB . . . . . . . . .\n. . . D .
     . F . . .\nC . B . . C . . . .\n. . E . . . . . . .\n. D . . . . . A . .\n. .
     . E . . . . . . \n. . . . . . . . F .\n. . . . . . . . . ."
-  solution: 'A:URDDRUURDDRUURDDDLDDRDRR
+  solution: 'A:URRRRRRRRRDDDDDDLL
 
-    B:DRRD
+    B:RURRRRRRRDDDDLLDDRRRDDLLLLLLLLLUUUURUR
 
-    D:DDDRDRDLLLLUU
+    D:DDDRDDLLLUU
 
-    F:UUURDDDDRUUUURDDDDDDDDDLU
+    F:LLDDRDDDRRR
 
-    C:RDLDDDDRRRRRRRULURRUULLUL
+    C:URRURRRRRDDLL
 
     E:DDR'

@@ -1,16 +1,24 @@
+using System;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 /// <summary>
-/// The three Amus helper buttons:
-///   Undo  — steps back one drag or reset, unlimited
-///   Reset — clears every wire the player drew (undoable), unlimited
-///   Lock  — lays one pair's wire on its correct path and locks it (pool of 4)
-/// When the Lock pool runs out, pressing Lock offers a rewarded ad which
+/// The four Amus helper buttons:
+///   Reset  — clears every wire the player drew except locked parts, unlimited
+///   Tip    — pulses one unfinished wire and marks the tile it should go to
+///            next (pool of 4)
+///   Reveal — the player taps any tile; it shows the colour it needs and is
+///            locked to it (pool of 4). While it waits for the tap the button
+///            pulses and the hint shows; pressing it again cancels for free.
+///   Lock   — locks the right part of every wire the player drew (whole
+///            wires, or the right stretch of unfinished ones) and erases the
+///            rest (pool of 4)
+/// When a pool runs out, pressing its button offers a rewarded ad which
 /// refills it to 4. Unusable buttons fade out.
 ///
-/// Put this on the Amus scene's HUD and assign the board, buttons, and label.
+/// Put this on the Amus scene's HUD and assign the board, buttons, and labels.
 /// Button clicks are wired in code — no OnClick setup needed.
 /// </summary>
 public class AmusHelperUI : MonoBehaviour
@@ -18,12 +26,23 @@ public class AmusHelperUI : MonoBehaviour
     [SerializeField] private AmusBoard board;
 
     [Header("Buttons")]
-    [SerializeField] private Button undoButton;
+    [FormerlySerializedAs("undoButton")] // Tip took the old Undo button's place
+    [SerializeField] private Button tipButton;
+    [SerializeField] private Button revealButton;
     [SerializeField] private Button resetButton;
     [SerializeField] private Button lockButton;
 
-    [Header("Remaining-use label (optional)")]
+    [Header("Remaining-use labels (optional)")]
+    [SerializeField] private TMP_Text tipCreditsLabel;
+    [SerializeField] private TMP_Text revealCreditsLabel;
     [SerializeField] private TMP_Text lockCreditsLabel;
+
+    [Header("Reveal")]
+    [Tooltip("Shown while Reveal waits for the player to tap a tile, e.g. a 'Tap a tile' label. Optional.")]
+    [SerializeField] private GameObject revealHint;
+    [Range(0f, 0.3f)]
+    [Tooltip("How much the Reveal button pulses while it waits for the tap.")]
+    [SerializeField] private float revealPulse = 0.08f;
 
     [Header("Disabled look")]
     [Range(0.1f, 1f)]
@@ -32,19 +51,25 @@ public class AmusHelperUI : MonoBehaviour
     [Tooltip("Seconds for a button to fade between usable and unusable.")]
     [SerializeField] private float fadeDuration = 0.2f;
 
-    private CanvasGroup _undoGroup;
+    private CanvasGroup _tipGroup;
+    private CanvasGroup _revealGroup;
     private CanvasGroup _resetGroup;
     private CanvasGroup _lockGroup;
+    private Vector3 _revealRestScale = Vector3.one;
 
     private void Awake()
     {
-        if (undoButton != null) undoButton.onClick.AddListener(OnUndo);
+        if (tipButton != null) tipButton.onClick.AddListener(OnTip);
+        if (revealButton != null) revealButton.onClick.AddListener(OnReveal);
         if (resetButton != null) resetButton.onClick.AddListener(OnReset);
         if (lockButton != null) lockButton.onClick.AddListener(OnLock);
 
-        _undoGroup = EnsureGroup(undoButton);
+        _tipGroup = EnsureGroup(tipButton);
+        _revealGroup = EnsureGroup(revealButton);
         _resetGroup = EnsureGroup(resetButton);
         _lockGroup = EnsureGroup(lockButton);
+        if (revealButton != null) _revealRestScale = revealButton.transform.localScale;
+        if (revealHint != null) revealHint.SetActive(false);
     }
 
     // A CanvasGroup fades the whole button — background, icon and label together.
@@ -60,21 +85,35 @@ public class AmusHelperUI : MonoBehaviour
     {
         bool boardActive = board != null && !board.IsFinished;
 
-        bool canUndo = boardActive && board.CanUndo;
-        Apply(undoButton, _undoGroup, canUndo, canUndo);
-
         bool canReset = boardActive && board.CanReset;
         Apply(resetButton, _resetGroup, canReset, canReset);
 
-        // An empty pool fades the button but keeps it pressable, since pressing
-        // it is what offers the rewarded ad that refills it. It stays off while
-        // the board is still working out its solution.
-        bool lockReady = boardActive && board.LockReady;
-        bool credits = HelperCredits.Remaining(HelperCredits.Pool.AmusLock) > 0;
-        Apply(lockButton, _lockGroup, lockReady, lockReady && credits);
+        // Each stays off while it has nothing to work on (or the board is still
+        // working out its solution).
+        ApplyHelper(tipButton, _tipGroup, tipCreditsLabel, HelperCredits.Pool.AmusTip,
+            boardActive && board.TipReady);
+        ApplyHelper(revealButton, _revealGroup, revealCreditsLabel, HelperCredits.Pool.AmusReveal,
+            boardActive && board.RevealReady);
+        ApplyHelper(lockButton, _lockGroup, lockCreditsLabel, HelperCredits.Pool.AmusLock,
+            boardActive && board.LockReady);
 
-        if (lockCreditsLabel != null)
-            lockCreditsLabel.text = HelperCredits.Remaining(HelperCredits.Pool.AmusLock).ToString();
+        // While Reveal waits for a tap: the button pulses and the hint shows.
+        bool picking = boardActive && board.PickingReveal;
+        if (revealHint != null && revealHint.activeSelf != picking) revealHint.SetActive(picking);
+        if (revealButton != null)
+        {
+            float pulse = picking ? 1f + revealPulse * Mathf.Sin(Time.unscaledTime * 8f) : 1f;
+            revealButton.transform.localScale = _revealRestScale * pulse;
+        }
+    }
+
+    // An empty pool fades its button but keeps it pressable, since pressing
+    // it is what offers the rewarded ad that refills it.
+    private void ApplyHelper(Button button, CanvasGroup group, TMP_Text label, HelperCredits.Pool pool, bool ready)
+    {
+        int left = HelperCredits.Remaining(pool);
+        Apply(button, group, ready, ready && left > 0);
+        if (label != null) label.text = left.ToString();
     }
 
     // 'clickable' controls whether the press registers; 'full' controls the
@@ -90,31 +129,53 @@ public class AmusHelperUI : MonoBehaviour
             : target;
     }
 
-    private void OnUndo()
+    private void OnTip() => UseHelper(HelperCredits.Pool.AmusTip, () => board.ShowTip());
+
+    // First press: wait for the player to tap a tile (the use is spent when a
+    // tile is revealed). Pressing again while waiting cancels, for free.
+    private void OnReveal()
     {
-        if (board != null) board.Undo();
+        if (board == null) return;
+
+        if (board.PickingReveal)
+        {
+            board.CancelRevealPick();
+            return;
+        }
+
+        UseHelper(HelperCredits.Pool.AmusReveal, () =>
+        {
+            board.StartRevealPick(() => HelperCredits.TryUse(HelperCredits.Pool.AmusReveal));
+            return false; // nothing to spend yet
+        });
     }
 
     private void OnReset()
     {
-        if (board != null) board.ResetBoard();
+        if (board == null) return;
+        board.CancelRevealPick();
+        board.ResetBoard();
     }
 
-    private void OnLock()
+    private void OnLock() => UseHelper(HelperCredits.Pool.AmusLock, () => board.LockCorrectWires());
+
+    // With uses left, runs the helper and spends one only if it did something;
+    // with none, offers the ad instead. Any other helper stops a Reveal pick.
+    private void UseHelper(HelperCredits.Pool pool, Func<bool> use)
     {
         if (board == null) return;
+        board.CancelRevealPick();
 
-        if (HelperCredits.Remaining(HelperCredits.Pool.AmusLock) <= 0)
+        if (HelperCredits.Remaining(pool) <= 0)
         {
-            OfferRefillAd();
+            OfferRefillAd(pool);
             return;
         }
 
-        // Spend a credit only if a wire actually got locked.
-        if (board.LockOnePath()) HelperCredits.TryUse(HelperCredits.Pool.AmusLock);
+        if (use()) HelperCredits.TryUse(pool);
     }
 
-    private void OfferRefillAd()
+    private void OfferRefillAd(HelperCredits.Pool pool)
     {
         if (AdManager.Instance == null)
         {
@@ -124,7 +185,7 @@ public class AmusHelperUI : MonoBehaviour
 
         AdManager.Instance.ShowRewardedAd(completed =>
         {
-            if (completed) HelperCredits.Refill(HelperCredits.Pool.AmusLock);
+            if (completed) HelperCredits.Refill(pool);
         });
     }
 }

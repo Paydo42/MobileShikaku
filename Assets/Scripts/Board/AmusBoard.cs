@@ -35,12 +35,15 @@ using UnityEngine.Events;
 /// automatically. The win effect plays before <see cref="OnSolved"/> fires,
 /// because the win panel hides the board.
 ///
-/// Helpers (driven by <see cref="AmusHelperUI"/>): <see cref="Undo"/> steps back
-/// one drag or reset, <see cref="ResetBoard"/> clears every wire the player
-/// drew, and <see cref="LockOnePath"/> lays one pair's wire on its correct path
-/// and locks it. Locks come from one solution, so they never contradict each
-/// other; it's read from the level's baked solution, or solved on a worker
-/// thread when the level has none.
+/// Helpers (driven by <see cref="AmusHelperUI"/>): <see cref="ShowTip"/> pulses
+/// one unfinished wire and marks the tile it should go to next,
+/// <see cref="StartRevealPick"/> lets the player tap a tile to reveal its colour
+/// and lock it to that colour, <see cref="ResetBoard"/> clears every wire the
+/// player drew, and <see cref="LockCorrectWires"/> locks the part of each wire
+/// the player has right (all of it, or the right stretch of an unfinished one)
+/// and erases the rest. "Right" is judged against one solution, so the helpers
+/// never contradict each other; it's read from the level's baked solution, or
+/// solved on a worker thread when the level has none.
 /// </summary>
 [DisallowMultipleComponent]
 public class AmusBoard : MonoBehaviour
@@ -146,6 +149,11 @@ public class AmusBoard : MonoBehaviour
     [Tooltip("Stripe width, as a fraction of the wire's width.")]
     [SerializeField] private float lockStripeWidth = 0.35f;
 
+    [Header("Reveal helper look")]
+    [Range(0.1f, 1f)]
+    [Tooltip("How strongly a revealed tile shows its colour (1 = the full wire colour).")]
+    [SerializeField] private float revealTint = 0.6f;
+
     [Header("Events")]
     public UnityEvent OnSolved;
     [Tooltip("Fired when the time limit runs out before solving.")]
@@ -175,13 +183,15 @@ public class AmusBoard : MonoBehaviour
     // Helpers.
     private const int SolverConflictBudget = 400000;
     private Transform _parent;
-    private bool[] _locked;
+    private List<Vector2Int>[] _lockPath; // per pair: its locked stretch, from an endpoint along the answer; null if none
     private AmusWire[] _lockViews;
     private List<Vector2Int>[] _solution; // one correct wire per pair, a -> b; null until known
+    private int[,] _answerOwner;          // per cell: its pair in _solution, -1 if none; null until known
+    private int[,] _revealed;             // per cell: the pair a Reveal locked it to, -1 if none
+    private System.Action _onRevealed;    // set while Reveal waits for the player to pick a tile
     private Task<int[][]> _solveTask;
     private readonly CancellationTokenSource _solveCancel = new(); // stops the solve if the board goes away
-    private readonly Stack<List<Vector2Int>[]> _history = new(); // wires before each undoable move
-    private List<Vector2Int>[] _dragStart; // wires when the current drag began
+    private int _lastTouched = -1; // pair the player last picked up; Tip prefers it
     private Coroutine _unfilledFlash;
     private bool _warnedUnfinished; // the "why isn't this a win" flash already played
 
@@ -255,8 +265,9 @@ public class AmusBoard : MonoBehaviour
 
         _wires = new List<Vector2Int>[_pairs.Count];
         for (int p = 0; p < _pairs.Count; p++) _wires[p] = new List<Vector2Int>();
-        _locked = new bool[_pairs.Count];
+        _lockPath = new List<Vector2Int>[_pairs.Count];
         _lockViews = new AmusWire[_pairs.Count];
+        _revealed = NewCellMap(_width, _height);
         _touchingWire = new bool[_pairs.Count];
         _stepAt = new int[_width * _height];
         for (int i = 0; i < _stepAt.Length; i++) _stepAt[i] = -1;
@@ -424,22 +435,36 @@ public class AmusBoard : MonoBehaviour
     /// Begin (or resume) a wire at a cell. Returns true if a drag should start:
     /// pressing an endpoint restarts that colour's wire from it; pressing a cell
     /// on an existing wire truncates back to it so the player can re-route.
+    /// A fully locked wire can't be picked up; a partly locked one is always
+    /// carried on from the end of its lock. While Reveal waits for a pick, the
+    /// press picks the tile instead.
     /// </summary>
     public bool BeginWire(Vector2Int cell)
     {
         if (_finished || _wires == null || !InBounds(cell)) return false;
 
-        // Taken before anything changes, so EndWire can record the drag for undo.
-        _dragStart = Snapshot();
+        if (_onRevealed != null)
+        {
+            Reveal(cell);
+            return false; // a pick, not a drag
+        }
 
         int endpoint = EndpointPairAt(cell);
         if (endpoint >= 0)
         {
-            if (_locked[endpoint]) return RejectLocked();
+            List<Vector2Int> locked = _lockPath[endpoint];
+            if (locked != null)
+            {
+                // Grabbing the dot the lock starts from carries on after the
+                // lock; the other dot can't start a second stretch.
+                if (IsFullyLocked(endpoint) || cell != locked[0]) return RejectLocked();
+                return ResumeAfterLock(endpoint);
+            }
+
             PlayErase(endpoint, 0);
             _wires[endpoint].Clear();
             _wires[endpoint].Add(cell);
-            _active = endpoint;
+            _active = _lastTouched = endpoint;
             RefreshVisuals();
             PlayStepFeedback(backtrack: false);
             return true;
@@ -449,12 +474,13 @@ public class AmusBoard : MonoBehaviour
         {
             int existing = _wires[p].IndexOf(cell);
             if (existing < 0) continue;
-            if (_locked[p]) return RejectLocked();
+            if (IsFullyLocked(p)) return RejectLocked();
+            if (existing < LockedCount(p) - 1) return ResumeAfterLock(p);
 
             int removed = _wires[p].Count - existing - 1;
             PlayErase(p, existing);
             _wires[p].RemoveRange(existing + 1, removed);
-            _active = p;
+            _active = _lastTouched = p;
             RefreshVisuals();
             if (removed > 0) PlayStepFeedback(backtrack: true);
             return true;
@@ -476,10 +502,11 @@ public class AmusBoard : MonoBehaviour
         if (Mathf.Abs(cell.x - head.x) + Mathf.Abs(cell.y - head.y) != 1) return;
 
         // Dragging back over the wire's own cells truncates it to that cell
-        // (also covers plain single-step undo).
+        // (also covers plain single-step undo), but never into its locked part.
         int own = wire.IndexOf(cell);
         if (own >= 0)
         {
+            if (own < LockedCount(_active) - 1) return;
             PlayErase(_active, own);
             wire.RemoveRange(own + 1, wire.Count - own - 1);
             RefreshVisuals();
@@ -491,9 +518,12 @@ public class AmusBoard : MonoBehaviour
         // extended past its endpoint.
         if (IsConnected(_active)) return;
 
-        // Wires never touch: no cell of another wire, no foreign endpoint.
+        // Wires never touch: no cell of another wire, no foreign endpoint, and
+        // no tile a Reveal locked to another colour.
         int owner = OwnerOf(cell);
         if (owner >= 0 && owner != _active) return;
+        int revealed = _revealed[cell.x, cell.y];
+        if (revealed >= 0 && revealed != _active) return;
 
         wire.Add(cell);
         RefreshVisuals();
@@ -505,20 +535,32 @@ public class AmusBoard : MonoBehaviour
     public void EndWire()
     {
         _active = -1;
-
-        // One drag = one undo step, and only if it actually changed something.
-        if (_dragStart != null && !MatchesCurrent(_dragStart)) _history.Push(_dragStart);
-        _dragStart = null;
-
         CheckSolved();
     }
+
+    // A helper button can be tapped with a second finger mid-drag. The helpers
+    // rewrite wires, so the drag ends there and later steps are ignored.
+    private void CancelDrag() => _active = -1;
 
     // A locked wire can't be picked up; a light tick says "no" without fuss.
     private bool RejectLocked()
     {
-        _dragStart = null;
         Haptics.Tick(20);
         return false;
+    }
+
+    // Starts a drag on a partly locked wire from the end of its lock, cutting
+    // off anything drawn past it (like grabbing any wire mid-way).
+    private bool ResumeAfterLock(int p)
+    {
+        int head = LockedCount(p) - 1;
+        int removed = _wires[p].Count - head - 1;
+        PlayErase(p, head);
+        _wires[p].RemoveRange(head + 1, removed);
+        _active = _lastTouched = p;
+        RefreshVisuals();
+        if (removed > 0) PlayStepFeedback(backtrack: true);
+        return true;
     }
 
     // Pitch climbs from 1 toward (1 + pitchRise) as more pairs connect, so the
@@ -550,64 +592,164 @@ public class AmusBoard : MonoBehaviour
 
     // Hands the stretch of wire p from fromIndex (which stays) to its tail to
     // the erase effect. Call before removing it.
-    private void PlayErase(int p, int fromIndex)
-    {
-        List<Vector2Int> wire = _wires[p];
-        if (_fx == null || wire.Count - fromIndex < 2) return;
+    private void PlayErase(int p, int fromIndex) => PlayErase(p, fromIndex, _wires[p].Count - 1);
 
+    // Same for any stretch, walked from 'keptIndex' (the cell that stays) to
+    // 'tipIndex' in either direction along the wire.
+    private void PlayErase(int p, int keptIndex, int tipIndex)
+    {
+        if (_fx == null || keptIndex < 0 || tipIndex < 0 || Mathf.Abs(tipIndex - keptIndex) < 1) return;
+
+        List<Vector2Int> wire = _wires[p];
+        int step = tipIndex > keptIndex ? 1 : -1;
         _pointBuffer.Clear();
-        for (int i = fromIndex; i < wire.Count; i++)
+        for (int i = keptIndex; i != tipIndex + step; i += step)
             _pointBuffer.Add(CellToWorld(wire[i]));
         _fx.PlayErase(_pointBuffer, PairColor(p));
     }
 
     #endregion
 
-    #region Helpers (undo / reset / lock), called by AmusHelperUI
-
-    /// <summary>True while there's a drag or reset to step back from.</summary>
-    public bool CanUndo => !_finished && _history.Count > 0;
+    #region Helpers (tip / reveal / reset / lock), called by AmusHelperUI
 
     /// <summary>
-    /// Steps back one drag or reset. Unlimited. Locked wires stay locked; the
-    /// restored board is fitted around them.
+    /// True when Tip has something to show: the solution is known (a big board
+    /// may still be solving it) and some wire isn't finished right yet.
     /// </summary>
-    public bool Undo()
-    {
-        if (!CanUndo) return false;
+    public bool TipReady => !_finished && TipPair() >= 0;
 
-        List<Vector2Int>[] previous = _history.Pop();
-        for (int p = 0; p < _wires.Length; p++) _wires[p] = new List<Vector2Int>(previous[p]);
-        EnforceLocks(playFx: false);
-        RefreshVisuals();
-        PlayStepFeedback(backtrack: true);
-        CheckSolved();
+    /// <summary>
+    /// The Tip helper. Picks one wire that isn't finished right (the one the
+    /// player last picked up, else the first), pulses it, and marks the tile
+    /// it should go to next, counted from the last cell it has right (from its
+    /// dot, if it isn't started). Changes no wires. False if there's nothing to
+    /// show: spend a helper credit only on true.
+    /// </summary>
+    public bool ShowTip()
+    {
+        int p = TipPair();
+        if (_finished || p < 0) return false;
+
+        // Read the answer from the dot the wire starts at (dot a when it has
+        // none yet). Its first cell is that dot, so at least one cell is right.
+        List<Vector2Int> wire = _wires[p];
+        List<Vector2Int> answer = _solution[p];
+        bool reversed = wire.Count > 0 && answer[0] != wire[0];
+        int right = Mathf.Max(1, MatchingCells(wire, answer, fromTail: false));
+
+        Vector2Int last = AnswerStep(answer, right - 1, reversed);
+        Vector2Int next = AnswerStep(answer, right, reversed);
+        _dotAt.TryGetValue(AnswerStep(answer, 0, reversed), out Transform dot);
+        if (_fx != null) _fx.PlayTip(_wireViews[p], PairColor(p), dot, CellToWorld(last), CellToWorld(next));
         return true;
     }
 
-    /// <summary>True while any wire the player drew (not a locked one) is on the board.</summary>
+    // The wire to tip: the one the player last picked up if it isn't finished
+    // right, else the first that isn't; -1 when there's none (or no answer yet).
+    private int TipPair()
+    {
+        if (_solution == null) return -1;
+        if (_lastTouched >= 0 && !IsRight(_lastTouched)) return _lastTouched;
+        for (int p = 0; p < _pairs.Count; p++)
+            if (!IsRight(p)) return p;
+        return -1;
+    }
+
+    // Wire p runs the whole answer, dot to dot.
+    private bool IsRight(int p) => MatchingCells(_wires[p], _solution[p], fromTail: false) == _solution[p].Count;
+
+    private static Vector2Int AnswerStep(List<Vector2Int> answer, int step, bool reversed) =>
+        reversed ? answer[answer.Count - 1 - step] : answer[step];
+
+    /// <summary>True when Reveal can be used: the solution is known (a big board may still be solving it).</summary>
+    public bool RevealReady => !_finished && _answerOwner != null;
+
+    /// <summary>True while Reveal waits for the player to tap a tile.</summary>
+    public bool PickingReveal => _onRevealed != null && !_finished;
+
+    /// <summary>
+    /// The Reveal helper: the next tap on the board picks a tile instead of
+    /// drawing. A tile whose colour isn't known yet shows the colour the
+    /// answer gives it and is locked to it: another colour's wire through it
+    /// is cut back, and only its own colour may cross it from then on. Then
+    /// <paramref name="onRevealed"/> runs (spend the helper credit there).
+    /// Taps on dots, walls or tiles already shown by a reveal or lock just
+    /// tick, and the board keeps waiting.
+    /// </summary>
+    public void StartRevealPick(System.Action onRevealed)
+    {
+        if (!RevealReady) return;
+        CancelDrag();
+        _onRevealed = onRevealed;
+    }
+
+    /// <summary>Stops waiting for a Reveal pick; nothing is spent.</summary>
+    public void CancelRevealPick() => _onRevealed = null;
+
+    private void Reveal(Vector2Int cell)
+    {
+        if (!CanReveal(cell))
+        {
+            Haptics.Tick(20);
+            return;
+        }
+
+        int p = _answerOwner[cell.x, cell.y];
+        _revealed[cell.x, cell.y] = p;
+
+        // Another colour's wire through it is cut back to just before it.
+        for (int q = 0; q < _wires.Length; q++)
+        {
+            int at = q == p ? -1 : _wires[q].IndexOf(cell);
+            if (at < 0) continue;
+            PlayErase(q, at - 1);
+            _wires[q].RemoveRange(at, _wires[q].Count - at);
+        }
+
+        RefreshVisuals();
+        if (_fx != null) _fx.PlayReveal(CellToWorld(cell), PairColor(p));
+
+        System.Action revealed = _onRevealed;
+        _onRevealed = null;
+        revealed();
+        CheckSolved();
+    }
+
+    // A tile Reveal can show: open, not a dot, part of the answer, and its
+    // colour not already shown by an earlier reveal or a lock.
+    private bool CanReveal(Vector2Int cell)
+    {
+        if (_answerOwner == null || _blocked[cell.x, cell.y] || EndpointPairAt(cell) >= 0) return false;
+        if (_revealed[cell.x, cell.y] >= 0) return false;
+
+        int p = _answerOwner[cell.x, cell.y];
+        return p >= 0 && (_lockPath[p] == null || !_lockPath[p].Contains(cell));
+    }
+
+    /// <summary>True while the player has drawn anything that isn't locked.</summary>
     public bool CanReset
     {
         get
         {
             if (_finished || _wires == null) return false;
             for (int p = 0; p < _wires.Length; p++)
-                if (!_locked[p] && _wires[p].Count >= 2) return true;
+                if (HasLooseCells(p)) return true;
             return false;
         }
     }
 
-    /// <summary>Clears every wire except locked ones. Undoable.</summary>
+    /// <summary>Clears everything the player drew except locked stretches.</summary>
     public bool ResetBoard()
     {
         if (!CanReset) return false;
 
-        _history.Push(Snapshot());
+        CancelDrag();
         for (int p = 0; p < _wires.Length; p++)
         {
-            if (_locked[p]) continue;
-            PlayErase(p, 0);
-            _wires[p].Clear();
+            if (!HasLooseCells(p)) continue;
+            int keep = LockedCount(p);
+            PlayErase(p, Mathf.Max(0, keep - 1));
+            _wires[p].RemoveRange(keep, _wires[p].Count - keep);
         }
         RefreshVisuals();
         PlayStepFeedback(backtrack: true);
@@ -616,69 +758,139 @@ public class AmusBoard : MonoBehaviour
     }
 
     /// <summary>
-    /// True when a lock can be placed: the solution is known (a big board may
-    /// still be solving it) and some pair isn't locked yet.
+    /// True when Lock has something to check: the solution is known (a big
+    /// board may still be solving it) and the player has drawn something that
+    /// isn't locked yet.
     /// </summary>
-    public bool LockReady
-    {
-        get
-        {
-            if (_finished || _solution == null) return false;
-            for (int p = 0; p < _locked.Length; p++)
-                if (!_locked[p]) return true;
-            return false;
-        }
-    }
+    public bool LockReady => _solution != null && CanReset;
 
     /// <summary>
-    /// Lays one pair's wire on its correct path and locks it, cutting back any
-    /// wire in the way. Picks the first pair the player doesn't already have
-    /// right. False if nothing was locked: spend a helper credit only on true.
-    /// Not an undo step; later undos are fitted around the lock instead.
+    /// The Lock helper. Each wire's right part is locked: a wire joined end to
+    /// end along the answer locks whole, and an unfinished or wrong one locks
+    /// the stretch from its starting dot that follows the answer. Everything
+    /// past that is erased. False if the press changed nothing: spend a
+    /// helper credit only on true.
     /// </summary>
-    public bool LockOnePath()
+    public bool LockCorrectWires()
     {
         if (!LockReady) return false;
 
-        int pick = -1;
-        for (int p = 0; p < _pairs.Count && pick < 0; p++)
-            if (!_locked[p] && !SamePath(_wires[p], _solution[p])) pick = p;
-        if (pick < 0) return false;
+        CancelDrag();
+        var newlyLocked = new List<int>();
+        bool erased = false;
 
-        PlayErase(pick, 0); // the player's own attempt at it, if any
-        _locked[pick] = true;
-        EnforceLocks(playFx: true);
+        for (int p = 0; p < _pairs.Count; p++)
+        {
+            if (!HasLooseCells(p)) continue;
+
+            List<Vector2Int> wire = _wires[p];
+            List<Vector2Int> right = RightPart(p, out bool fromTail);
+            int keep = right?.Count ?? 0;
+
+            if (keep > LockedCount(p))
+            {
+                _lockPath[p] = right;
+                newlyLocked.Add(p);
+            }
+
+            if (keep < wire.Count)
+            {
+                // Erase the rest, from the last cell that stays out to the tip.
+                if (fromTail) PlayErase(p, wire.Count - keep, 0);
+                else PlayErase(p, Mathf.Max(0, keep - 1));
+                erased = true;
+            }
+            _wires[p] = keep > 0 ? new List<Vector2Int>(right) : new List<Vector2Int>();
+        }
+
+        if (newlyLocked.Count == 0 && !erased) return false;
+
+        foreach (int p in newlyLocked) ShowLockStripe(p);
         RefreshVisuals();
-        PlayConnect(pick);
+        if (newlyLocked.Count > 0) PlayLockFx(newlyLocked);
+        else Haptics.Tick(30); // nothing was right; the erase says the rest
         CheckSolved();
         return true;
     }
 
-    // Puts every locked pair on its solution path and cuts other wires back to
-    // just before the first cell they'd share with one.
-    private void EnforceLocks(bool playFx)
+    // The longest stretch of wire p, read from the dot it starts at, that
+    // follows the answer; for a wire joined at both dots, read from whichever
+    // dot gives more (unless a lock already fixes the direction). Null if
+    // nothing past the dot itself is right.
+    private List<Vector2Int> RightPart(int p, out bool fromTail)
     {
-        var lockedCells = new HashSet<Vector2Int>();
-        for (int p = 0; p < _pairs.Count; p++)
+        List<Vector2Int> wire = _wires[p];
+        int best = MatchingCells(wire, _solution[p], fromTail: false);
+        fromTail = false;
+
+        if (_lockPath[p] == null && IsConnected(p))
         {
-            if (!_locked[p]) continue;
-            _wires[p] = new List<Vector2Int>(_solution[p]);
-            foreach (Vector2Int cell in _solution[p]) lockedCells.Add(cell);
-            ShowLockStripe(p);
+            int fromOtherEnd = MatchingCells(wire, _solution[p], fromTail: true);
+            if (fromOtherEnd > best)
+            {
+                best = fromOtherEnd;
+                fromTail = true;
+            }
         }
 
-        for (int q = 0; q < _pairs.Count; q++)
+        if (best < 2)
         {
-            if (_locked[q]) continue;
-            List<Vector2Int> wire = _wires[q];
-            int cut = wire.FindIndex(lockedCells.Contains);
-            if (cut < 0) continue;
-            if (playFx) PlayErase(q, Mathf.Max(0, cut - 1));
-            wire.RemoveRange(cut, wire.Count - cut);
+            fromTail = false;
+            return null;
         }
+        var part = new List<Vector2Int>(best);
+        for (int i = 0; i < best; i++) part.Add(fromTail ? wire[wire.Count - 1 - i] : wire[i]);
+        return part;
     }
 
-    // A thin light stripe down the middle marks a wire as locked.
+    // How many cells of the wire, read from its first cell (or its last),
+    // match the answer read from the same dot.
+    private static int MatchingCells(List<Vector2Int> wire, List<Vector2Int> answer, bool fromTail)
+    {
+        if (wire.Count == 0) return 0;
+        Vector2Int start = fromTail ? wire[^1] : wire[0];
+        bool answerForward = answer[0] == start;
+        if (!answerForward && answer[^1] != start) return 0;
+
+        int n = 0;
+        while (n < wire.Count && n < answer.Count)
+        {
+            Vector2Int cell = fromTail ? wire[wire.Count - 1 - n] : wire[n];
+            Vector2Int expected = answerForward ? answer[n] : answer[answer.Count - 1 - n];
+            if (cell != expected) break;
+            n++;
+        }
+        return n;
+    }
+
+    private int LockedCount(int p) => _lockPath[p]?.Count ?? 0;
+
+    private bool IsFullyLocked(int p) => _lockPath[p] != null && _lockPath[p].Count == _solution[p].Count;
+
+    // Drawn cells past the wire's lock (or any wire at all, if unlocked).
+    private bool HasLooseCells(int p) => _wires[p].Count > Mathf.Max(LockedCount(p), 1);
+
+    private void PlayLockFx(List<int> pairs)
+    {
+        if (_fx == null) return;
+
+        var wires = new List<AmusWire>(pairs.Count);
+        var colors = new List<Color>(pairs.Count);
+        var dots = new List<Transform>(pairs.Count * 2);
+        foreach (int p in pairs)
+        {
+            wires.Add(_wireViews[p]);
+            colors.Add(PairColor(p));
+
+            // The far dot only pops if the lock reaches it.
+            _dotAt.TryGetValue(_lockPath[p][0], out Transform start);
+            dots.Add(start);
+            if (IsFullyLocked(p) && _dotAt.TryGetValue(_lockPath[p][^1], out Transform end)) dots.Add(end);
+        }
+        _fx.PlayLock(wires, colors, dots);
+    }
+
+    // A thin light stripe down the middle marks the locked stretch.
     private void ShowLockStripe(int p)
     {
         if (_lockViews[p] == null)
@@ -690,50 +902,21 @@ public class AmusBoard : MonoBehaviour
         }
 
         _pointBuffer.Clear();
-        foreach (Vector2Int cell in _solution[p]) _pointBuffer.Add(CellToWorld(cell));
+        foreach (Vector2Int cell in _lockPath[p]) _pointBuffer.Add(CellToWorld(cell));
         _lockViews[p].SetPoints(_pointBuffer);
     }
 
-    private List<Vector2Int>[] Snapshot()
-    {
-        var copy = new List<Vector2Int>[_wires.Length];
-        for (int p = 0; p < _wires.Length; p++) copy[p] = new List<Vector2Int>(_wires[p]);
-        return copy;
-    }
-
-    private bool MatchesCurrent(List<Vector2Int>[] snapshot)
-    {
-        for (int p = 0; p < _wires.Length; p++)
-        {
-            if (snapshot[p].Count != _wires[p].Count) return false;
-            for (int i = 0; i < _wires[p].Count; i++)
-                if (snapshot[p][i] != _wires[p][i]) return false;
-        }
-        return true;
-    }
-
-    // Same cells in order, walked either way (the player may start from b).
-    private static bool SamePath(List<Vector2Int> wire, List<Vector2Int> path)
-    {
-        if (wire.Count != path.Count) return false;
-
-        bool forward = true;
-        bool backward = true;
-        for (int i = 0; i < wire.Count; i++)
-        {
-            if (wire[i] != path[i]) forward = false;
-            if (wire[i] != path[path.Count - 1 - i]) backward = false;
-        }
-        return forward || backward;
-    }
-
-    // The lock helper's answer: the level's baked solution if it still fits
-    // the grid, else solved on a worker thread so a big board can't stall a
-    // frame. Locks come from this one solution, so they never contradict.
+    // The helpers' answer: the level's baked solution if it still fits the
+    // grid, else solved on a worker thread so a big board can't stall a frame.
+    // Every helper works from this one solution, so they never contradict.
     private void LoadSolution()
     {
-        if (puzzle.TryDecodeSolution(_pairs, _blocked, _width, _height, puzzle.mustFillBoard, out _solution))
+        if (puzzle.TryDecodeSolution(_pairs, _blocked, _width, _height, puzzle.mustFillBoard,
+                out List<Vector2Int>[] baked))
+        {
+            SetSolution(baked);
             return;
+        }
 
         int width = _width;
         int height = _height;
@@ -784,12 +967,31 @@ public class AmusBoard : MonoBehaviour
             return;
         }
 
-        _solution = new List<Vector2Int>[wires.Length];
+        var solution = new List<Vector2Int>[wires.Length];
         for (int p = 0; p < wires.Length; p++)
         {
-            _solution[p] = new List<Vector2Int>(wires[p].Length);
-            foreach (int cell in wires[p]) _solution[p].Add(new Vector2Int(cell % _width, cell / _width));
+            solution[p] = new List<Vector2Int>(wires[p].Length);
+            foreach (int cell in wires[p]) solution[p].Add(new Vector2Int(cell % _width, cell / _width));
         }
+        SetSolution(solution);
+    }
+
+    // Keeps the answer, and notes which pair each tile belongs to in it.
+    private void SetSolution(List<Vector2Int>[] solution)
+    {
+        _solution = solution;
+        _answerOwner = NewCellMap(_width, _height);
+        for (int p = 0; p < solution.Length; p++)
+            foreach (Vector2Int cell in solution[p]) _answerOwner[cell.x, cell.y] = p;
+    }
+
+    private static int[,] NewCellMap(int width, int height)
+    {
+        var map = new int[width, height];
+        for (int x = 0; x < width; x++)
+            for (int y = 0; y < height; y++)
+                map[x, y] = -1;
+        return map;
     }
 
     private bool HasEmptyCell()
@@ -918,6 +1120,10 @@ public class AmusBoard : MonoBehaviour
         // neutral; with dots off the tile has to show it.
         int endpoint = EndpointPairAt(c);
         if (endpoint >= 0 && !showDots) return PairColor(endpoint);
+
+        // A revealed tile shows the colour the answer gives it.
+        int revealed = _revealed[c.x, c.y];
+        if (revealed >= 0) return Color.Lerp(emptyColor, PairColor(revealed), revealTint);
 
         if (tintCells)
         {

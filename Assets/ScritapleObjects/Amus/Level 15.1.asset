@@ -15,28 +15,57 @@ MonoBehaviour:
   levelName: 
   mustFillBoard: 1
   timeLimitSeconds: 0
-  grid: ". . . . . . . . . . . . . . .\n. . . . . . . . . . . . . . .\n. . 2 . .
-    . . . . . . . . . . \n. . . . . . . . . . 7 . . . .\n1 . . . . . . . . . 8 .
-    . . .\n. . 3 . . . 6 . 2 . . . . . .\n. . . . 4 . . . . . . . 8 . .\n. . . .
-    . . 6 3 . . 7 . . . .\n. . . . 5 . . 5 . . . . . 9 4\n. . . . . . . . . . . .
-    . . . \n. . . . . . . . . . . . . . 10\n. . 1 . . . . . . . . . 9 . .\n. . .
-    . . . . . . . . . . . .\n. . . . . . . . . . . . . 10 ."
-  solution: '2:RRRRRRULLLLLLURRRRRRRDDDLDRDL
+  grid: 'A . . . . . . . . . . . . . .
 
-    7:UUURRRRDLDRDLDRDDDLLLUULDD
+    . B A . . C . . . . . . . D .
 
-    1:UUUURDDDRDLDLDRRDLLDRDLDDDDRUUURRRDLL
+    .
+    . . . . . . . . . . E F . .
 
-    8:RUUURDDDDRDL
+    . . . . . . . . . . G . . . .
 
-    3:RRULURRDRURDDDRRDLL
+    . H . . .
+    . . . D . . . . . .
 
-    6:LDRD
+    . . . B . . . . . . . . . . .
 
-    4:LDDLDRRRDDDLLLDRRRRRRRULLLUUURRURDRURDDLLLLDRRRRDLDRRURUUURU
+    . . . . G . . . .
+    . . E . . .
 
-    5:URDRR
+    . . . . . . . . . F . . . . .
 
-    9:LDDD
+    . . . . . . . . . . . . .
+    . .
 
-    10:DDDL'
+    I . J . I . . . . . . . . . .
+
+    . . . . . . . . . . . . . . .
+
+    .
+    . . . . . . . . . . . . . .
+
+    . . . . . . . . . . . . C . .
+
+    . H . . J
+    . . . . . . . . . .
+
+    . . . . . . . . . . . . . . .'
+  solution: 'A:DDRRU
+
+    B:URRDDDDD
+
+    C:DDDDDDRDDDRRRRRRRRDDDDLLLLLLLLLLLUURRRRRRRRR
+
+    D:LLLLLDDD
+
+    E:LLDDRRRRDDDDLLLLLUURRR
+
+    F:RRUULLLLLLLDDDDDRRRRRDDLLL
+
+    G:RRRRDDDDDDLLLLLLLUUULUUUUUULLDDDDDD
+
+    H:DDDRDRDDLLDDD
+
+    I:DDDDDRRUUURRUU
+
+    J:LULUUUUURRDDDRDRDRDDDRRRRRRRRDDLLLLLLLLL'

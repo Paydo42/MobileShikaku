@@ -17,6 +17,7 @@ MonoBehaviour:
   gameSceneName: Amus
   levelsFolder: 
   levels:
+  - {fileID: 11400000, guid: d04013ad99b2db44ca422dec4acedc85, type: 2}
   - {fileID: 11400000, guid: b735d4c7ff78243438a1e31fb9362fe9, type: 2}
   - {fileID: 11400000, guid: fd6650c80b66a494e9cb1e08f9c985af, type: 2}
   - {fileID: 11400000, guid: b2fce863160954a4bab5521492b8426d, type: 2}
@@ -116,4 +117,3 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 1ab1eb1b1414a37419ad4823f25b24d9, type: 2}
   - {fileID: 11400000, guid: 837ad92bf2830a74d8fee3f30966009d, type: 2}
   - {fileID: 11400000, guid: e6aa9fa98476d2d49bcacb0f9da0e1eb, type: 2}
-  - {fileID: 11400000, guid: d04013ad99b2db44ca422dec4acedc85, type: 2}

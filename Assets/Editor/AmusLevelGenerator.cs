@@ -11,13 +11,13 @@ using System.Threading;
 /// How it works:
 ///   1. Tile the board with dominoes (two-cell wires).
 ///   2. Join wires whose ends touch until the wanted number of pairs is left.
-///      A wire may never touch itself: one running right beside its own
-///      earlier part leaves room for a shortcut, which means a second answer.
-///      When no join fits, a wire end re-routes by taking over part of a
-///      neighbouring wire, which opens up new joins.
-///   3. Ask <see cref="AmusSolver"/> for any other answer. None means the level
-///      is unique; if there is one, cut a wire where the two answers differ
-///      (one more pair) and ask again.
+///      A wire may never touch itself (the game's no-touching rule, see
+///      <see cref="AmusPuzzle.TouchesItself"/>). When no join fits, a wire end
+///      re-routes by taking over part of a neighbouring wire, which opens up
+///      new joins.
+///   3. Ask <see cref="AmusSolver"/> for any other answer that keeps the rules.
+///      None means the level is unique; if there is one, cut a wire where the
+///      two answers differ (one more pair) and ask again.
 /// Among the unique levels found in the time given, the one closest to the
 /// wanted pair count wins, then the one whose wires wander furthest from
 /// straight routes.

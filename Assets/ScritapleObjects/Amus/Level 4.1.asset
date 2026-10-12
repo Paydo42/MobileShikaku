@@ -15,13 +15,13 @@ MonoBehaviour:
   levelName: 
   mustFillBoard: 1
   timeLimitSeconds: 0
-  grid: 'A . . .
+  grid: '. . . A
 
-    . . B .
+    . . . .
 
-    . B . .
+    . B A .
 
-    . . . A'
-  solution: 'A:DRURRDDD
+    . . . B'
+  solution: 'A:LLLDDDRRU
 
-    B:DDLLUR'
+    B:URRDD'

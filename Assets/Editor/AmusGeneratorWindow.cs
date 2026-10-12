@@ -125,9 +125,9 @@ public class AmusGeneratorWindow : EditorWindow
     {
         _scroll = EditorGUILayout.BeginScrollView(_scroll);
         EditorGUILayout.HelpBox(
-            "Makes Puzzle Baron-style levels: wires fill every tile, wind around each other, and there is " +
-            "exactly one answer. Fewer pairs means longer wires and a harder level. Nothing is saved until " +
-            "you press Save.", MessageType.None);
+            "Makes Puzzle Baron-style levels: wires fill every tile, wind around each other without ever " +
+            "touching themselves, and there is exactly one answer. Fewer pairs means longer wires and a " +
+            "harder level. Nothing is saved until you press Save.", MessageType.None);
 
         bool busy = _task != null;
         using (new EditorGUI.DisabledScope(busy))

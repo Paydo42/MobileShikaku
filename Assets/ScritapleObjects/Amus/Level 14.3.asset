@@ -21,7 +21,7 @@ MonoBehaviour:
     . . .\n. . . . . . . . . 10 . . . .\n. . . . . . . 4 . . . . . .\n. . . . . .
     7 . . . . . . .\n. . . 4 6 . . . 8 . . . . .\n. . . 5 . . . . . . . . . .\n.
     . . . . 3 . . . . . . . 7"
-  solution: '1:RRRRRRRRRDRURRRDDDLUULDLLLULLDR
+  solution: '1:RRRRRRRRRRRRRDDDDDDDDDDDDLLLLLLUURRRRUUUUUUUULLLL
 
     6:LLLLLDDDDDDDDDDDDRRRRUU
 
@@ -29,14 +29,14 @@ MonoBehaviour:
 
     2:RRR
 
-    9:RDRUULLLDD
+    9:LD
 
-    3:DDDRRDLDRDDD
+    3:DDDDDRRDDD
 
-    10:DRRRUURDDDLLDDRURDDLLDDLLURUUUULD
+    10:RUULLLDDLDDRRRD
 
-    8:RDLDRDRDLLDDRU
+    8:RRRDDDLLULLLUUUURUUURRRRRRDDDDDDDDDDLLLL
 
-    4:LUULLURRURUULDLDLULLDDDDDRDLDR
+    4:LLLUUUUULLDDDDDDDR
 
-    7:DDDRRRRRRUURDD'
+    7:DDDRRRRRRR'

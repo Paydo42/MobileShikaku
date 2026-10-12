@@ -11,6 +11,9 @@ using UnityEngine;
 ///     rippling out from where the wire was cut.
 ///   * Connect: when a pair gets joined, both its dots pop, the wire briefly
 ///     swells and brightens, and a little confetti bomb goes off at each end.
+///   * Tip: one wire pulses bigger, and the tile it should go to next is
+///     marked with a faint stroke and a blinking glow.
+///   * Reveal: a soft burst of the revealed colour on the picked tile.
 ///   * Win: a ball of electricity runs through every wire: it leaves the dot
 ///     the wire was started from, travels inside the cable with a short tail,
 ///     and disappears into the far dot, which pops (with a rising ding). Once
@@ -20,8 +23,9 @@ using UnityEngine;
 /// Inspector to tune the numbers. Everything is built from code, so no prefab,
 /// sprite or material is needed.
 ///
-/// Draw order, relative to the board's wire order W: erase ghost W-1 (under
-/// the wires, over the tiles); ball halo, tail and erase puffs W+1, ball bloom
+/// Draw order, relative to the board's wire order W: erase ghost and tip
+/// stroke W-1 (under the wires, over the tiles); tip and reveal glows, ball
+/// halo, tail and erase puffs W+1, ball bloom
 /// W+2, ball core W+3, all above the wires but under the dots (W+4) and
 /// letters (W+5), so the ball reads as running inside the cable between them;
 /// confetti W+6, over everything.
@@ -73,6 +77,33 @@ public class AmusFx : MonoBehaviour
     [Tooltip("Optional extra colours mixed in with the wire's own shades, for a rainbow burst.")]
     [SerializeField] private Color[] confettiExtraColors = new Color[0];
 
+    [Header("Tip")]
+    [Tooltip("Seconds a tip stays on show.")]
+    [SerializeField] private float tipDuration = 2f;
+    [Range(1, 6)]
+    [Tooltip("How many times the wire and the marker pulse in that time.")]
+    [SerializeField] private int tipPulses = 3;
+    [Range(0f, 2f)]
+    [Tooltip("How much the tipped wire swells at the peak of each pulse (0.6 = 60% wider).")]
+    [SerializeField] private float tipWireSwell = 0.6f;
+    [Range(0f, 1f)]
+    [Tooltip("How much the wire's starting dot grows at the peak of each pulse.")]
+    [SerializeField] private float tipDotPop = 0.3f;
+    [Range(0.3f, 2f)]
+    [Tooltip("Size of the glow on the next tile, as a fraction of a cell.")]
+    [SerializeField] private float tipMarkerSize = 1.1f;
+    [Tooltip("Optional sound when a tip shows.")]
+    [SerializeField] private AudioClip tipClip;
+
+    [Header("Reveal")]
+    [Tooltip("Seconds for the burst of colour on a revealed tile.")]
+    [SerializeField] private float revealDuration = 0.45f;
+    [Range(0.5f, 3f)]
+    [Tooltip("How far the burst spreads, as a fraction of a cell.")]
+    [SerializeField] private float revealBurstSize = 1.6f;
+    [Tooltip("Optional sound when a tile is revealed.")]
+    [SerializeField] private AudioClip revealClip;
+
     [Header("Win: a ball of electricity through each wire")]
     [SerializeField] private bool playWin = true;
     [Tooltip("How fast the ball travels, in cells per second.")]
@@ -113,6 +144,13 @@ public class AmusFx : MonoBehaviour
     private readonly List<AmusWire> _linePool = new();
     private readonly List<SpriteRenderer> _spritePool = new();
     private readonly Dictionary<Transform, Vector3> _restScale = new();
+
+    // The tip on show, so a new tip (or its end) can put everything back.
+    private Coroutine _tip;
+    private AmusWire _tipWire;
+    private Transform _tipDot;
+    private AmusWire _tipStroke;
+    private SpriteRenderer _tipMarker;
 
     /// <summary>Whether the board should wait for <see cref="PlayWin"/> before reporting a win.</summary>
     public bool PlaysWin => playWin;
@@ -222,6 +260,108 @@ public class AmusFx : MonoBehaviour
         Haptics.Tick(35);
         if (connectClip != null && SoundManager.Instance != null)
             SoundManager.Instance.PlaySfx(connectClip);
+    }
+
+    /// <summary>
+    /// Several wires locked at once by the Lock helper: each wire swells and
+    /// its dots pop, with one haptic and one sound for the lot and no confetti
+    /// (the player already got that when they joined them). Wires and colours
+    /// are index-matched; dots may contain nulls.
+    /// </summary>
+    public void PlayLock(IReadOnlyList<AmusWire> wires, IReadOnlyList<Color> colors, IReadOnlyList<Transform> dots)
+    {
+        if (!playConnect || _parent == null || !isActiveAndEnabled || wires.Count == 0) return;
+
+        for (int i = 0; i < wires.Count; i++)
+            if (wires[i] != null) StartCoroutine(SwellRoutine(wires[i], colors[i]));
+        foreach (Transform dot in dots) Punch(dot, connectDotPop, connectDuration);
+
+        Haptics.Tick(35);
+        if (connectClip != null && SoundManager.Instance != null)
+            SoundManager.Instance.PlaySfx(connectClip);
+    }
+
+    /// <summary>
+    /// The Tip helper: <paramref name="wire"/> pulses bigger, and its starting
+    /// <paramref name="dot"/> with it, while the tile it should go to next is
+    /// marked: a faint stroke from <paramref name="from"/> (its last right
+    /// cell) to <paramref name="to"/>, with a glow blinking there. A new tip
+    /// replaces one still on show; the wire and dot are put back afterwards.
+    /// The dot may be null when the board draws none.
+    /// </summary>
+    public void PlayTip(AmusWire wire, Color color, Transform dot, Vector3 from, Vector3 to)
+    {
+        if (_parent == null || !isActiveAndEnabled) return;
+
+        EndTip();
+        _tipWire = wire;
+        _tipDot = dot;
+        if (dot != null && !_restScale.ContainsKey(dot)) _restScale[dot] = dot.localScale;
+        _tipStroke = RentLine(WithAlpha(color, 0f), _wireWidth, _roundness, _wireOrder - 1);
+        _tipStroke.SetPoints(new List<Vector3> { from, to });
+        _tipMarker = RentSprite(BoardArt.GlowSprite, _wireOrder + 1);
+        _tip = StartCoroutine(TipRoutine(color, to));
+
+        Haptics.Tick(30);
+        if (tipClip != null && SoundManager.Instance != null)
+            SoundManager.Instance.PlaySfx(tipClip);
+    }
+
+    private IEnumerator TipRoutine(Color color, Vector3 target)
+    {
+        for (float t = 0f; t < tipDuration; t += Time.deltaTime)
+        {
+            float pulse = Mathf.Abs(Mathf.Sin(t / tipDuration * Mathf.PI * tipPulses)); // 0 -> 1 -> 0, tipPulses times
+            if (_tipWire != null) _tipWire.SetWidth(_wireWidth * (1f + tipWireSwell * pulse));
+            if (_tipDot != null) _tipDot.localScale = _restScale[_tipDot] * (1f + tipDotPop * pulse);
+            _tipStroke.SetColor(WithAlpha(color, 0.35f + 0.35f * pulse));
+            Place(_tipMarker, target, tipMarkerSize * (0.75f + 0.25f * pulse), WithAlpha(color, 0.45f + 0.45f * pulse));
+            yield return null;
+        }
+
+        _tip = null;
+        EndTip();
+    }
+
+    /// <summary>The Reveal helper: a soft burst of <paramref name="color"/> spreads from a revealed tile.</summary>
+    public void PlayReveal(Vector3 position, Color color)
+    {
+        if (_parent == null || !isActiveAndEnabled) return;
+
+        StartCoroutine(RevealRoutine(position, color));
+        Haptics.Tick(35);
+        if (revealClip != null && SoundManager.Instance != null)
+            SoundManager.Instance.PlaySfx(revealClip);
+    }
+
+    private IEnumerator RevealRoutine(Vector3 position, Color color)
+    {
+        SpriteRenderer burst = RentSprite(BoardArt.GlowSprite, _wireOrder + 1);
+        for (float t = 0f; t < revealDuration; t += Time.deltaTime)
+        {
+            float k = t / revealDuration;
+            Place(burst, position, revealBurstSize * (0.3f + 0.7f * EaseOut(k)), WithAlpha(color, 0.9f * (1f - k)));
+            yield return null;
+        }
+        Release(burst);
+    }
+
+    // Puts the tipped wire and dot back and returns the marker pieces to the pool.
+    private void EndTip()
+    {
+        if (_tip != null)
+        {
+            StopCoroutine(_tip);
+            _tip = null;
+        }
+        if (_tipWire != null) _tipWire.SetWidth(_wireWidth);
+        if (_tipDot != null) _tipDot.localScale = _restScale[_tipDot];
+        if (_tipStroke != null) Release(_tipStroke);
+        if (_tipMarker != null) Release(_tipMarker);
+        _tipWire = null;
+        _tipDot = null;
+        _tipStroke = null;
+        _tipMarker = null;
     }
 
     private IEnumerator SwellRoutine(AmusWire wire, Color color)

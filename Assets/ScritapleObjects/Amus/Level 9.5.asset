@@ -34,14 +34,14 @@ MonoBehaviour:
     . . . B C . . . .
 
     . . . . . E A . .'
-  solution: 'C:DDDDLLDDDRURDRRU
+  solution: 'C:LDDDDLDDDRRRRU
 
-    E:URRDDDDDDLLD
+    E:LDLDDRRRRDDLLD
 
-    F:DDDLUU
+    F:DL
 
-    A:RULURULURRRDDDRUUURRRRDDDDDDDDLL
+    A:UUUURRRRRRRRDDDDDDDDLL
 
-    D:LDRDRR
+    D:RRRUUULLLLDLDDDDRRRR
 
-    B:RRD'
+    B:DRR'
